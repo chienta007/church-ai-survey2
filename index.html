@@ -7,7 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     
     <script>
-        // --- 1. 管理員基本設定 ---
+        // --- 1. 管理員基本設定 (最優先執行) ---
         window.CONFIG = {
             ORG_NAME: "我的教會",      // <--- 您的教會名稱
             ADMIN_PWD: "2024",        // <--- 您的後台管理密碼
@@ -20,19 +20,34 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Firebase 初始化保護
-        let firebaseConfig = {};
+        // 安全地初始化 Firebase
+        let db, auth, appId;
         try {
-            if (typeof __firebase_config !== 'undefined' && __firebase_config) {
-                firebaseConfig = JSON.parse(__firebase_config);
-            }
-        } catch (e) { console.error("Firebase Config Error"); }
+            const configStr = window.__firebase_config || "{}";
+            const firebaseConfig = JSON.parse(configStr);
+            const app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+            appId = window.__app_id || 'church-ai-app';
+            
+            // 認證監聽
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    const docRef = doc(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID, user.uid);
+                    const docSnap = await getDoc(docRef);
+                    if (docSnap.exists() || localStorage.getItem('done_' + window.CONFIG.SURVEY_ID)) {
+                        window.showCompletedScreen();
+                    }
+                } else {
+                    if (window.__initial_auth_token) await signInWithCustomToken(auth, window.__initial_auth_token);
+                    else await signInAnonymously(auth);
+                }
+            });
+        } catch (e) {
+            console.warn("目前環境不支援雲端自動同步，將以純預覽模式運行。");
+        }
 
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'church-ai-app';
-
+        // --- 核心變數 ---
         let step = 0;
         let response = { age: '', exp: '', interests: [], pain: '', mode: '', time: '' };
         
@@ -45,24 +60,7 @@
             { k: 'time', t: '最方便的時段？', type: 's', opts: ['平日晚上', '週六下午', '主日午後'] }
         ];
 
-        // 立即執行 UI 初始化
-        const initUI = () => {
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.has('admin')) {
-                window.handleAdminEntry();
-            } else {
-                document.getElementById('org-name-text').innerText = window.CONFIG.ORG_NAME;
-                document.getElementById('survey-card').style.display = 'block'; // 強制顯示
-            }
-        };
-
-        // 確保 DOM 讀取完畢後執行
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initUI);
-        } else {
-            initUI();
-        }
-
+        // --- 核心函數掛載到 window ---
         window.beginSurvey = () => { step = 1; updateUI(); };
         window.goBack = () => { if(step > 1) { step--; updateUI(); } };
         window.goNext = () => {
@@ -72,7 +70,6 @@
             }
             if(step < 6) { step++; updateUI(); } else { finalize(); }
         };
-
         window.setS = (k, v) => { response[k] = v; updateUI(); if(step < 6) setTimeout(window.goNext, 300); };
         window.toggleM = (v) => {
             const i = response.interests.indexOf(v);
@@ -85,6 +82,7 @@
             const main = document.getElementById('main-ui');
             const nav = document.getElementById('nav');
             const progress = document.getElementById('progress-bar-container');
+            
             progress.classList.remove('hidden');
             nav.classList.remove('hidden');
             
@@ -97,7 +95,7 @@
                 html += `<div class="grid gap-3">`;
                 q.opts.forEach(o => {
                     const active = response.interests.includes(o);
-                    html += `<button onclick="toggleM('${o}')" class="btn-opt w-full text-left p-4 rounded-2xl bg-gray-50 text-sm font-medium ${active?'btn-sel':''}"><div class="flex justify-between"><span>${o}</span><span>${active?'✓':''}</span></div></button>`;
+                    html += `<button onclick="toggleM('${o}')" class="btn-opt w-full text-left p-4 rounded-2xl bg-gray-50 text-sm font-medium ${active?'btn-sel':''}"><div class="flex justify-between items-center"><span>${o}</span><span>${active?'✓':''}</span></div></button>`;
                 });
                 html += `</div>`;
             } else {
@@ -116,28 +114,20 @@
             const main = document.getElementById('main-ui');
             document.getElementById('nav').classList.add('hidden');
             document.getElementById('progress-bar-container').classList.add('hidden');
-            main.innerHTML = `<div class="text-center py-20"><div class="loading-spin mx-auto mb-6"></div><p class="text-gray-400 text-sm font-bold tracking-widest">正在同步資料...</p></div>`;
+            main.innerHTML = `<div class="text-center py-20"><div class="loading-spin mx-auto mb-6"></div><p class="text-gray-400 text-sm font-bold tracking-widest">正在儲存回覆...</p></div>`;
+            
             try {
-                const uid = auth.currentUser.uid;
-                const docRef = doc(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID, uid);
-                await setDoc(docRef, { ...response, org: window.CONFIG.ORG_NAME, timestamp: new Date().toISOString() });
+                if (db && auth.currentUser) {
+                    const uid = auth.currentUser.uid;
+                    const docRef = doc(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID, uid);
+                    await setDoc(docRef, { ...response, org: window.CONFIG.ORG_NAME, timestamp: new Date().toISOString() });
+                }
                 localStorage.setItem('done_' + window.CONFIG.SURVEY_ID, 'true');
                 main.innerHTML = `<div class="text-center fade-in py-10"><div class="text-6xl mb-8">🙌</div><h2 class="text-2xl font-black text-gray-800 mb-3">哈利路亞！</h2><p class="text-gray-500 mb-4 leading-relaxed px-4">您的意見已存入雲端，感謝您的協助。</p></div>`;
-            } catch(e) { alert("連線不穩定，請重試"); step = 6; updateUI(); }
-        }
-
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                const docRef = doc(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID, user.uid);
-                const docSnap = await getDoc(docRef);
-                if (docSnap.exists() || localStorage.getItem('done_' + window.CONFIG.SURVEY_ID)) {
-                    window.showCompletedScreen();
-                }
-            } else {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) await signInWithCustomToken(auth, __initial_auth_token);
-                else await signInAnonymously(auth);
+            } catch(e) {
+                main.innerHTML = `<div class="text-center py-10"><h2 class="text-xl font-bold text-red-500 mb-4">連線不穩</h2><button onclick="location.reload()" class="bg-blue-600 text-white px-6 py-2 rounded-xl">重試</button></div>`;
             }
-        });
+        }
 
         window.showCompletedScreen = () => {
             const main = document.getElementById('main-ui');
@@ -149,10 +139,10 @@
             const p = prompt("管理員密碼：");
             if(p !== window.CONFIG.ADMIN_PWD) { alert("密碼錯誤"); location.href = location.pathname; return; }
             
-            document.getElementById('survey-card').style.display = 'block';
             const main = document.getElementById('main-ui');
             main.innerHTML = `<div class="text-center py-20"><div class="loading-spin mx-auto mb-6"></div><p class="text-gray-400 text-sm font-bold">雲端同步中...</p></div>`;
             
+            if (!db) return alert("資料庫未連接");
             const colRef = collection(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID);
             onSnapshot(colRef, (snap) => {
                 const list = snap.docs.map(d => d.data());
@@ -193,6 +183,26 @@
         };
     </script>
 
+    <script>
+        // --- 2. 介面初始化 (傳統 Script 確保速度) ---
+        function initInterface() {
+            const orgText = document.getElementById('org-name-text');
+            if (orgText) orgText.innerText = window.CONFIG.ORG_NAME;
+            
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('admin')) {
+                // 等待 Module 載入 handleAdminEntry
+                const checkModule = setInterval(() => {
+                    if (window.handleAdminEntry) {
+                        window.handleAdminEntry();
+                        clearInterval(checkModule);
+                    }
+                }, 100);
+            }
+        }
+        window.addEventListener('load', initInterface);
+    </script>
+
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
         body { font-family: 'Noto Sans TC', sans-serif; background-color: #f1f5f9; -webkit-tap-highlight-color: transparent; }
@@ -207,7 +217,7 @@
     </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
-    <div id="survey-card" style="display:none;" class="bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full p-10 fade-in border border-white">
+    <div id="survey-card" class="bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full p-10 fade-in border border-white">
         <div id="header" class="text-center mb-12">
             <div class="inline-block p-6 bg-blue-50 rounded-[2rem] mb-6 text-4xl shadow-inner">⛪</div>
             <h1 class="text-xl font-bold text-gray-800 tracking-tight">數位時代新服事</h1>
