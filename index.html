@@ -29,6 +29,7 @@
         import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         let db, auth, appId;
+        let isAuthReady = false;
 
         async function initApp() {
             try {
@@ -47,8 +48,8 @@
                 window.auth = auth;
                 window.appId = appId;
 
-                // 2. 執行認證 (RULE 3 - FIRST and AWAIT)
-                const authenticate = async () => {
+                // 2. 核心認證 (確保 await 完成)
+                const runAuth = async () => {
                     if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                         return await signInWithCustomToken(auth, __initial_auth_token);
                     } else {
@@ -56,18 +57,18 @@
                     }
                 };
                 
-                await authenticate();
+                await runAuth();
 
-                // 3. 監聽認證狀態並初始化 UI
+                // 3. 監聽認證狀態 (確定拿到 UID 才啟動 UI)
                 onAuthStateChanged(auth, async (user) => {
                     if (!user) return;
                     
+                    isAuthReady = true;
                     window.currentUser = user;
                     const urlParams = new URLSearchParams(window.location.search);
                     
                     if (!urlParams.has('admin')) {
                         try {
-                            // 檢查是否已填過 (雲端檢查)
                             const docRef = doc(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID, user.uid);
                             const docSnap = await getDoc(docRef);
                             
@@ -76,54 +77,53 @@
                             } else {
                                 document.getElementById('survey-card').style.display = 'block';
                                 document.getElementById('loading-overlay').style.display = 'none';
+                                document.getElementById('org-display').innerText = window.CONFIG.ORG_NAME;
                             }
                         } catch (e) {
-                            console.error("Permission Error during initial check:", e);
-                            document.getElementById('main-ui').innerHTML = `<div class="text-red-500 text-sm p-4">資料庫權限不足，請聯繫管理員檢查 Firebase Rules。</div>`;
-                            document.getElementById('survey-card').style.display = 'block';
-                            document.getElementById('loading-overlay').style.display = 'none';
+                            console.error("Permission Error:", e);
+                            document.getElementById('loading-txt').innerText = "連線失敗，請檢查資料庫 Rules 是否正確。";
                         }
                     } else {
                         window.handleAdminMode();
                     }
                 });
             } catch (err) {
-                console.error("Initialization Error:", err);
-                alert("系統初始化失敗，請檢查金鑰或網路。");
+                console.error("Firebase Init Error:", err);
+                document.getElementById('loading-txt').innerText = "系統初始化失敗，請檢查網路連線。";
             }
         }
         initApp();
 
-        // 提交數據邏輯
+        // 提交數據邏輯 (加入嚴格 User 檢查)
         window.saveSurvey = async (data) => {
-            if (!auth.currentUser) return alert("尚未登入，無法送出資料。");
+            const user = auth.currentUser;
+            if (!user) {
+                alert("連線不穩，尚未獲取數位身份，請重新整理頁面。");
+                return;
+            }
             
             const main = document.getElementById('main-ui');
-            main.innerHTML = `<div class="text-center py-20"><div class="loading-spin mx-auto mb-4"></div><p class="text-gray-400 text-sm">正在同步至雲端...</p></div>`;
+            main.innerHTML = `<div class="text-center py-20"><div class="loading-spin mx-auto mb-4"></div><p class="text-gray-400 text-sm">數據飛向雲端中...</p></div>`;
             
             try {
-                const uid = auth.currentUser.uid;
-                const docRef = doc(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID, uid);
-                await setDoc(docRef, { ...data, org: window.CONFIG.ORG_NAME, timestamp: new Date().toISOString(), userId: uid });
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID, user.uid);
+                await setDoc(docRef, { ...data, org: window.CONFIG.ORG_NAME, timestamp: new Date().toISOString(), userId: user.uid });
                 
                 localStorage.setItem('done_' + window.CONFIG.SURVEY_ID, 'true');
                 window.showCompletedScreen();
             } catch (e) {
-                console.error("Save Error:", e);
-                alert("提交失敗！請確認 Firebase 控制台中的 Firestore Rules 已改為『測試模式』。錯誤碼：" + e.code);
+                alert("儲存失敗！錯誤代碼：" + e.code + "\n請確保資料庫 Rules 已設為測試模式。");
                 location.reload();
             }
         };
 
-        // 管理員後台監聽
         window.fetchAdminData = (onUpdate) => {
             if (!auth.currentUser) return;
             const colRef = collection(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID);
             onSnapshot(colRef, (snap) => {
                 onUpdate(snap.docs.map(d => d.data()));
             }, (err) => {
-                console.error("Snapshot Error:", err);
-                alert("無法讀取數據：權限不足。請確保 Firestore Rules 設定正確。");
+                alert("讀取失敗：權限不足，請檢查 Rules。");
                 location.reload();
             });
         };
@@ -131,38 +131,39 @@
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
-        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f1f5f9; -webkit-tap-highlight-color: transparent; }
-        .fade-in { animation: fadeIn 0.4s ease-out forwards; }
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f1f5f9; -webkit-tap-highlight-color: transparent; color: #1e293b; }
+        .fade-in { animation: fadeIn 0.3s ease-out forwards; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .btn-opt { transition: all 0.2s; border: 1px solid #e2e8f0; cursor: pointer; user-select: none; }
         .btn-sel { background-color: #2563eb !important; color: white !important; border-color: #1d4ed8; }
-        .loading-spin { border: 3px solid rgba(0,0,0,0.1); border-left-color: #2563eb; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
+        .loading-spin { border: 3px solid rgba(0,0,0,0.1); border-left-color: #2563eb; border-radius: 50%; width: 28px; height: 28px; animation: spin 1s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
         .custom-scroll::-webkit-scrollbar { width: 4px; }
         .custom-scroll::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
     </style>
 </head>
-<body class="min-h-screen flex items-center justify-center p-4 text-gray-800">
+<body class="min-h-screen flex items-center justify-center p-4">
 
+    <!-- 全螢幕加載遮罩 -->
     <div id="loading-overlay" class="fixed inset-0 bg-white z-50 flex items-center justify-center">
         <div class="text-center">
             <div class="loading-spin mx-auto mb-4"></div>
-            <p class="text-gray-400 text-sm">正在同步雲端服務...</p>
+            <p id="loading-txt" class="text-gray-400 text-sm font-medium">與雲端同步中，請稍候...</p>
         </div>
     </div>
 
-    <div id="survey-card" style="display:none;" class="bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full p-10 fade-in relative">
+    <div id="survey-card" style="display:none;" class="bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full p-10 fade-in">
         <div id="header" class="text-center mb-10">
             <div class="inline-block p-6 bg-blue-50 rounded-[2rem] mb-6 text-4xl">⛪</div>
-            <h1 class="text-xl font-bold text-gray-800 tracking-tight">數位時代新服事</h1>
+            <h1 class="text-xl font-bold tracking-tight">數位時代新服事</h1>
             <h2 class="text-2xl font-black text-blue-600 mb-2">AI 系列課程需求調查</h2>
-            <p class="text-xs text-gray-400">本問卷由 <span id="org-display" class="font-bold">載入中</span> 發起</p>
+            <p class="text-xs text-gray-400">本問卷由 <span id="org-display" class="font-bold">...</span> 發起</p>
         </div>
 
         <div id="progress-area" class="hidden mb-8">
-            <div class="flex justify-between text-[10px] text-gray-400 mb-2 font-black">
+            <div class="flex justify-between text-[10px] text-gray-400 mb-2 font-black uppercase">
                 <span id="step-txt">STEP 0/6</span>
-                <span>需求調查中</span>
+                <span>調查進行中</span>
             </div>
             <div class="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
                 <div id="progress-bar" class="bg-blue-600 h-full transition-all duration-500" style="width: 0%"></div>
@@ -171,8 +172,8 @@
 
         <div id="main-ui">
             <div class="text-center">
-                <p class="text-gray-500 mb-12 text-sm leading-relaxed px-4">主內平安！邀請您花 30 秒填寫，幫助我們規劃更貼合需要的 AI 學習課程。</p>
-                <button onclick="begin()" class="w-full bg-blue-600 text-white font-bold py-5 rounded-2xl shadow-xl shadow-blue-100 active:scale-95 transition">
+                <p class="text-gray-500 mb-12 text-sm leading-relaxed px-4">主內平安！邀請您花 30 秒填寫，協助我們規劃更適合教會需要的 AI 課程。</p>
+                <button onclick="begin()" class="w-full bg-blue-600 text-white font-bold py-5 rounded-2xl shadow-xl active:scale-95 transition">
                     立即開始填寫
                 </button>
             </div>
@@ -203,11 +204,10 @@
             const main = document.getElementById('main-ui');
             const nav = document.getElementById('nav');
             nav.classList.remove('hidden');
-            
             document.getElementById('step-txt').innerText = `STEP ${step}/6`;
             document.getElementById('progress-bar').style.width = `${(step/6)*100}%`;
 
-            let html = `<div class="fade-in"><h2 class="text-xl font-bold mb-8 text-gray-800">${q.t}</h2>`;
+            let html = `<div class="fade-in"><h2 class="text-xl font-bold mb-8">${q.t}</h2>`;
             if(q.type === 's') {
                 html += `<div class="grid gap-3">`;
                 q.opts.forEach(o => html += `<button onclick="pickS('${o}')" class="btn-opt w-full text-left p-4 rounded-2xl bg-gray-50 ${answers[q.k]===o?'btn-sel':''}">${o}</button>`);
@@ -249,28 +249,28 @@
             document.getElementById('main-ui').innerHTML = `
                 <div class="text-center fade-in py-10">
                     <div class="text-6xl mb-8">✅</div>
-                    <h2 class="text-2xl font-black mb-2 text-gray-800">您已完成填寫</h2>
-                    <p class="text-gray-400 mb-10 text-sm">謝謝您的協助！</p>
-                    <button onclick="enterAdmin()" class="w-full bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg active:scale-95">查看統計成果</button>
-                    <button onclick="localStorage.removeItem('done_'+window.CONFIG.SURVEY_ID);location.reload();" class="mt-8 text-[10px] text-gray-300 underline tracking-widest block mx-auto">清除紀錄 (重新測試用)</button>
+                    <h2 class="text-2xl font-black mb-2">您已完成填寫</h2>
+                    <p class="text-gray-400 mb-10 text-sm">您的心聲我們收到了，哈利路亞！</p>
+                    <button onclick="enterAdmin()" class="w-full bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg active:scale-95">查看成果</button>
+                    <button onclick="localStorage.removeItem('done_'+window.CONFIG.SURVEY_ID);location.reload();" class="mt-8 text-[10px] text-gray-300 underline tracking-widest block mx-auto">清除紀錄 (重新測試)</button>
                 </div>`;
         };
 
         window.enterAdmin = () => {
-            const p = prompt("請輸入管理員密碼：");
+            const p = prompt("密碼：");
             if (p !== window.CONFIG.ADMIN_PWD) return alert("密碼錯誤");
-            document.getElementById('main-ui').innerHTML = `<div class="text-center py-20"><div class="loading-spin mx-auto mb-4"></div><p class="text-gray-400 text-sm">正在從雲端抓取...</p></div>`;
+            document.getElementById('main-ui').innerHTML = `<div class="text-center py-20"><div class="loading-spin mx-auto mb-4"></div><p class="text-gray-400">連線中...</p></div>`;
             window.fetchAdminData((list) => {
-                let html = `<div class="fade-in text-left"><div class="flex justify-between items-center mb-6"><div><h2 class="text-xl font-bold">雲端統計成果</h2><p class="text-[10px] text-blue-500 font-bold">目前共 ${list.length} 位回覆</p></div><button onclick="dlExcel(window.cachedList)" class="bg-green-500 text-white text-[10px] px-3 py-2 rounded-lg">下載</button></div><div class="space-y-3 max-h-96 overflow-auto pr-2 custom-scroll">`;
+                let html = `<div class="fade-in text-left"><div class="flex justify-between items-center mb-6"><div><h2 class="text-xl font-bold">即時統計成果</h2><p class="text-[10px] text-blue-500 font-bold uppercase">收到 ${list.length} 份回覆</p></div><button onclick="dlExcel(window.cachedList)" class="bg-green-500 text-white text-[10px] px-3 py-2 rounded-lg">匯出</button></div><div class="space-y-3 max-h-96 overflow-auto custom-scroll">`;
                 list.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
                 list.forEach(r => {
                     html += `<div class="p-4 bg-gray-50 rounded-2xl border border-gray-100 text-xs">
-                        <div class="flex justify-between mb-2"><span class="font-black text-blue-600 bg-white px-2 py-0.5 rounded border border-blue-50">${r.age}</span><span class="text-gray-300 font-normal scale-90">${new Date(r.timestamp).toLocaleDateString()}</span></div>
-                        <p class="mb-1 text-gray-700"><b>${r.exp}</b></p>
-                        <div class="bg-white p-2 rounded-lg border border-gray-50 italic text-gray-400">"${r.pain || '未填寫'}"</div>
+                        <div class="flex justify-between mb-2"><span class="font-black text-blue-600 bg-white px-2 py-0.5 rounded border border-blue-50">${r.age}</span><span class="text-gray-300 font-normal">${new Date(r.timestamp).toLocaleDateString()}</span></div>
+                        <p class="mb-1"><b>${r.exp}</b></p>
+                        <p class="text-gray-400 italic">"${r.pain || '未填寫'}"</p>
                     </div>`;
                 });
-                document.getElementById('main-ui').innerHTML = html + `</div><button onclick="location.reload()" class="mt-8 w-full py-4 text-xs text-gray-400 font-bold bg-gray-100 rounded-xl hover:bg-gray-200 transition">離開後台</button></div>`;
+                document.getElementById('main-ui').innerHTML = html + `</div><button onclick="location.reload()" class="mt-8 w-full py-4 text-xs text-gray-400 font-bold bg-gray-100 rounded-xl transition">離開</button></div>`;
                 window.cachedList = list;
             });
         };
@@ -279,11 +279,10 @@
             let csv = "\ufeff時間,年齡,熟悉度,技能,方式,時段,痛點\n";
             list.forEach(r => csv += `${r.timestamp},${r.age},${r.exp},"${r.interests}",${r.mode},${r.time},"${r.pain}"\n`);
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "調查統計成果.csv"; a.click();
+            const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "調查統計.csv"; a.click();
         };
 
         window.handleAdminMode = () => { window.enterAdmin(); };
-        window.onload = () => { document.getElementById('org-display').innerText = window.CONFIG.ORG_NAME; };
     </script>
 </body>
 </html>
