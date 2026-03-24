@@ -8,12 +8,12 @@
     
     <script>
         // ==========================================
-        // --- 1. 管理員基本設定 (請在此修改教會名稱) ---
+        // --- 1. 管理員基本設定 (正式版) ---
         // ==========================================
         window.CONFIG = {
-            ORG_NAME: "001教會名稱",  // <--- 修改這裡，全站都會同步變更
+            ORG_NAME: "主耶穌愛您教會",  
             ADMIN_PWD: "2024",        
-            SURVEY_ID: "church_ai_v2", 
+            SURVEY_ID: "church_ai_v2_gemini", 
             
             FIREBASE_SETTING: {
                 apiKey: "AIzaSyDapTicgqPQG-c-5lCFD0qs_IfhYU93xPU",
@@ -31,6 +31,33 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+        // --- Gemini API 配置 ---
+        const apiKey = ""; // 執行環境會自動注入
+        
+        async function callGemini(prompt, systemPrompt = "") {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] }
+            };
+
+            let delay = 1000;
+            for (let i = 0; i < 5; i++) {
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        body: JSON.stringify(payload)
+                    });
+                    const result = await response.json();
+                    return result.candidates?.[0]?.content?.parts?.[0]?.text || "抱歉，目前無法生成建議。";
+                } catch (e) {
+                    if (i === 4) throw e;
+                    await new Promise(r => setTimeout(r, delay));
+                    delay *= 2;
+                }
+            }
+        }
+
         // 初始化 Firebase
         const config = window.CONFIG.FIREBASE_SETTING;
         const app = initializeApp(config);
@@ -41,71 +68,112 @@
         window.db = db;
         window.auth = auth;
 
-        // 背景靜默認證 (不阻擋 UI)
-        async function startAuth() {
+        // 公開 AI 功能給 window
+        window.getAIAdvice = async (answers) => {
+            const btn = document.getElementById('ai-advice-btn');
+            const box = document.getElementById('ai-advice-box');
+            btn.disabled = true;
+            btn.innerHTML = `<div class="spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> 正在思考中...`;
+            
+            const system = "您是一位充滿愛心的教會數位導師。根據使用者的問卷回答，給予一句簡短的鼓勵和一個與其興趣相關的 AI 實用小撇步。請用繁體中文，兩句話以內。";
+            const prompt = `年齡：${answers.age}，熟悉度：${answers.exp}，興趣：${answers.interests.join(', ')}，痛點：${answers.pain}`;
+            
+            try {
+                const advice = await callGemini(prompt, system);
+                box.innerHTML = `<div class="p-4 bg-blue-50 border-l-4 border-blue-500 text-blue-800 text-sm italic rounded-r-xl fade-in">${advice}</div>`;
+                btn.style.display = 'none';
+            } catch (e) {
+                alert("AI 忙碌中，請稍後再試。");
+                btn.disabled = false;
+                btn.innerHTML = `獲取 AI 學習建議 ✨`;
+            }
+        };
+
+        window.analyzeTrends = async (list) => {
+            const btn = document.getElementById('ai-analyze-btn');
+            const resArea = document.getElementById('ai-res-area');
+            btn.disabled = true;
+            btn.innerText = "✨ AI 正在深度分析中...";
+            
+            const dataSummary = list.map(r => `[年齡:${r.age},程度:${r.exp},興趣:${r.interests},痛點:${r.pain}]`).join("\n");
+            const system = "您是一位教會事工顧問。請根據以下 AI 課程需求調查結果，為教會提供 3 個核心課程建議以及 1 個給牧者的實行建議。請用繁體中文回覆，語氣溫暖且具啟發性，並使用 Markdown 格式（如加粗）。";
+            
+            try {
+                const analysis = await callGemini(`調查數據：\n${dataSummary}`, system);
+                resArea.innerHTML = `<div class="p-6 bg-white border border-blue-100 rounded-2xl text-xs text-gray-700 leading-relaxed shadow-inner fade-in prose prose-sm">${analysis.replace(/\n/g, '<br>')}</div>`;
+                btn.style.display = 'none';
+            } catch (e) {
+                alert("分析失敗，請檢查網路連線。");
+                btn.disabled = false;
+                btn.innerText = "重新分析趨勢 ✨";
+            }
+        };
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const isAdminMode = urlParams.has('admin');
+
+        async function runAuth() {
             try {
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     await signInWithCustomToken(auth, __initial_auth_token);
                 } else {
                     await signInAnonymously(auth);
                 }
-            } catch (e) { 
-                console.warn("背景連線稍慢，不影響填寫。");
-            }
+            } catch (e) { console.warn("Background connection pending..."); }
         }
-        startAuth();
+        runAuth();
 
-        // 狀態監聽
         onAuthStateChanged(auth, async (user) => {
+            document.querySelectorAll('.org-name-label').forEach(el => el.innerText = window.CONFIG.ORG_NAME);
+            
             if (user) {
-                const urlParams = new URLSearchParams(window.location.search);
-                if (urlParams.has('admin')) {
-                    window.openAdminPanel();
+                if (isAdminMode) {
+                    window.renderAdminLogin();
                     return;
                 }
-                // 檢查是否重複填寫
-                const localDone = localStorage.getItem('done_' + window.CONFIG.SURVEY_ID);
-                if (localDone) {
-                    window.showDone();
+                const localFlag = localStorage.getItem('done_' + window.CONFIG.SURVEY_ID);
+                if (localFlag === 'true') {
+                    // 如果本地標記已完成，嘗試讀取資料以供 AI 建議使用
+                    const docSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID, user.uid));
+                    window.showDone(docSnap.exists() ? docSnap.data() : null);
+                    return;
+                }
+
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID, user.uid);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    localStorage.setItem('done_' + window.CONFIG.SURVEY_ID, 'true');
+                    window.showDone(docSnap.data());
                 } else {
-                    const docRef = doc(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID, user.uid);
-                    const docSnap = await getDoc(docRef);
-                    if (docSnap.exists()) window.showDone();
+                    document.getElementById('survey-card').style.display = 'block';
                 }
             }
         });
 
-        // 儲存數據
         window.sendData = async (data) => {
-            const container = document.getElementById('main-content');
-            container.innerHTML = `<div class="text-center py-20"><div class="spin mx-auto mb-4"></div><p class="text-gray-400">正在同步至雲端...</p></div>`;
-            
+            const main = document.getElementById('main-content');
+            main.innerHTML = `<div class="text-center py-20"><div class="spin mx-auto mb-4"></div><p class="text-gray-400 text-sm font-medium">與雲端同步中...</p></div>`;
             try {
-                let user = auth.currentUser;
-                // 如果當下沒 user，嘗試最後一次緊急認證
-                if (!user) user = (await signInAnonymously(auth)).user;
-
+                const user = auth.currentUser;
                 const docRef = doc(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID, user.uid);
                 await setDoc(docRef, { ...data, org: window.CONFIG.ORG_NAME, timestamp: new Date().toISOString() });
                 localStorage.setItem('done_' + window.CONFIG.SURVEY_ID, 'true');
-                window.showDone();
-            } catch (e) {
-                console.error("儲存失敗", e);
-                // 即使資料庫規則沒開，也視為填寫完成，避免使用者卡死
+                window.showDone(data);
+            } catch (e) { 
                 localStorage.setItem('done_' + window.CONFIG.SURVEY_ID, 'true');
-                window.showDone(); 
+                window.showDone(data); 
             }
         };
 
         window.watchData = (cb) => {
-            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID), (s) => cb(s.docs.map(d => d.data())), (err) => console.error("無權限"));
+            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID), (s) => cb(s.docs.map(d => d.data())), (err) => alert("權限不足"));
         };
     </script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
-        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f1f5f9; -webkit-tap-highlight-color: transparent; }
-        .fade { animation: fadeIn 0.4s ease-out forwards; }
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f8fafc; color: #1e293b; -webkit-tap-highlight-color: transparent; }
+        .fade-in { animation: fadeIn 0.4s ease-out forwards; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .opt-btn { transition: all 0.2s; border: 1px solid #e2e8f0; cursor: pointer; user-select: none; }
         .opt-sel { background-color: #2563eb !important; color: white !important; border-color: #1d4ed8; }
@@ -117,28 +185,28 @@
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
 
-    <div id="survey-card" class="bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full p-10 fade border border-white">
-        <!-- 標題：教會名稱會自動帶入 -->
+    <div id="survey-card" style="display:none;" class="bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full p-10 fade-in border border-white">
+        <!-- 標題 -->
         <div id="header-ui" class="text-center mb-10">
             <div class="inline-block p-6 bg-blue-50 rounded-[2rem] mb-6 text-4xl shadow-inner shadow-blue-100/50">⛪</div>
             <h1 class="text-xl font-bold text-gray-800 tracking-tight">數位時代新服事</h1>
             <h2 class="text-2xl font-black text-blue-600 mb-2 leading-tight">AI 系列課程需求調查</h2>
-            <p class="text-xs text-gray-400">本問卷由 <span class="org-name-label font-bold text-gray-700">載入中</span> 發起</p>
+            <p class="text-xs text-gray-400 font-medium">本問卷由 <span class="org-name-label font-bold text-gray-700">載入中</span> 發起</p>
         </div>
 
-        <!-- 內容 -->
+        <!-- 內容區 -->
         <div id="main-content">
             <div class="text-center">
                 <p class="text-gray-500 mb-12 text-sm leading-relaxed px-4 font-medium">平安！邀請您分享想法，協助我們規劃最適合弟兄姊妹的 AI 課程。</p>
-                <button onclick="start()" class="w-full bg-blue-600 text-white font-bold py-5 rounded-2xl shadow-xl active:scale-95 transition">
+                <button onclick="startSurvey()" class="w-full bg-blue-600 text-white font-bold py-5 rounded-2xl shadow-xl active:scale-95 transition">
                     立即開始填寫
                 </button>
             </div>
         </div>
 
-        <!-- 導覽 -->
+        <!-- 導覽按鈕 -->
         <div id="nav-ui" class="hidden mt-8 flex gap-3">
-            <button id="btn-back" onclick="prev()" class="flex-1 bg-gray-50 text-gray-400 font-bold py-4 rounded-2xl active:scale-95 transition">上一步</button>
+            <button id="btn-back" onclick="prev()" class="flex-1 bg-gray-100 text-gray-400 font-bold py-4 rounded-2xl active:scale-95 transition">上一步</button>
             <button id="btn-next" onclick="next()" class="flex-[2] bg-blue-600 text-white font-bold py-4 rounded-2xl shadow-lg active:scale-95 transition">下一步</button>
         </div>
     </div>
@@ -155,19 +223,12 @@
             { k: 'time', t: '方便上課的時段？', type: 's', opts: ['平日晚上', '週六下午', '主日午後'] }
         ];
 
-        function syncLabels() {
-            document.querySelectorAll('.org-name-label').forEach(el => el.innerText = window.CONFIG.ORG_NAME);
-        }
-
-        function start() { step = 1; render(); }
-
+        function startSurvey() { step = 1; render(); }
         function render() {
             const q = questions[step-1];
             const main = document.getElementById('main-content');
-            const nav = document.getElementById('nav-ui');
-            nav.classList.remove('hidden');
-            
-            let html = `<div class="fade"><p class="text-[10px] text-blue-500 font-black mb-3 uppercase tracking-widest">Question ${step}/6</p><h2 class="text-xl font-bold mb-8 text-gray-800">${q.t}</h2>`;
+            document.getElementById('nav-ui').classList.remove('hidden');
+            let html = `<div class="fade-in"><p class="text-[10px] text-blue-500 font-black mb-3 uppercase tracking-widest">Question ${step}/6</p><h2 class="text-xl font-bold mb-8 text-gray-800 leading-snug">${q.t}</h2>`;
             if(q.type === 's') {
                 html += `<div class="grid gap-3">`;
                 q.opts.forEach(o => html += `<button onclick="setS('${q.k}','${o}')" class="opt-btn w-full text-left p-4 rounded-2xl bg-gray-50 text-sm font-medium ${resp[q.k]===o?'opt-sel':''}">${o}</button>`);
@@ -193,41 +254,69 @@
             if(i > -1) resp.interests.splice(i, 1); else resp.interests.push(v);
             render();
         };
-
         window.next = () => {
             const q = questions[step-1];
-            if((q.type==='s'&&!resp[q.k]) || (q.type==='m'&&resp.interests.length===0) || (q.type==='t'&&!resp.pain.trim())) return alert("請完成本題填寫喔！");
+            if((q.type==='s'&&!resp[q.k]) || (q.type==='m'&&resp.interests.length===0) || (q.type==='t'&&!resp.pain.trim())) return alert("請先完成本題內容喔！");
             if(step < 6) { step++; render(); } else { window.sendData(resp); }
         };
         window.prev = () => { if(step > 1) { step--; render(); } };
 
-        window.showDone = () => {
+        window.showDone = (userData = null) => {
+            document.getElementById('survey-card').style.display = 'block';
             document.getElementById('nav-ui').style.display = 'none';
-            document.getElementById('main-content').innerHTML = `
-                <div class="text-center fade py-10">
+            let content = `
+                <div class="text-center fade-in py-10">
                     <div class="text-6xl mb-8">🙌</div>
                     <h2 class="text-2xl font-black mb-2 text-gray-800">哈利路亞！</h2>
-                    <p class="text-gray-400 mb-10 text-sm font-medium text-center">謝謝您的寶貴意見！心聲已存入雲端。<br>願神祝福您的服事。</p>
-                    <p class="text-[9px] text-gray-200 uppercase tracking-[0.3em] mb-12">Submission Secured</p>
-                    <button onclick="localStorage.removeItem('done_'+window.CONFIG.SURVEY_ID);location.reload();" class="text-[10px] text-gray-300 underline tracking-widest block mx-auto font-bold uppercase">清除紀錄 (測試用)</button>
-                </div>`;
-        }
+                    <p class="text-gray-400 mb-6 text-sm font-medium text-center px-6 leading-relaxed">謝謝您的寶貴意見！您的想法已安全存入雲端，這將協助我們規劃更貼合需要的課程。</p>
+            `;
+            
+            if (userData) {
+                content += `
+                    <div id="ai-advice-box" class="mb-8">
+                        <button id="ai-advice-btn" onclick='getAIAdvice(${JSON.stringify(userData)})' class="w-full py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-100 hover:scale-105 transition transform">獲取 AI 學習建議 ✨</button>
+                    </div>
+                `;
+            }
 
-        window.openAdminPanel = () => {
-            const p = prompt("管理密碼：");
-            if (p !== window.CONFIG.ADMIN_PWD) return alert("密碼錯誤");
-            document.getElementById('main-content').innerHTML = `<div class="text-center py-20"><div class="spin mx-auto mb-4"></div><p class="text-gray-400 text-sm">正在讀取雲端數據...</p></div>`;
+            content += `<p class="text-[9px] text-gray-200 uppercase tracking-[0.4em] mb-4 font-bold">Submission Secured</p></div>`;
+            document.getElementById('main-content').innerHTML = content;
+        };
+
+        window.renderAdminLogin = () => {
+            document.getElementById('survey-card').style.display = 'block';
+            document.getElementById('header-ui').innerHTML = `<div class="inline-block p-6 bg-blue-50 rounded-[2rem] mb-6 text-4xl">🔐</div><h2 class="text-2xl font-black text-gray-800">管理員權限驗證</h2><p class="text-xs text-gray-400 mt-2">請輸入您的專屬密碼</p>`;
+            document.getElementById('main-content').innerHTML = `<div class="space-y-4 px-4 mt-8"><input type="password" id="admin-pass" class="w-full p-4 bg-gray-50 border-0 rounded-2xl focus:ring-2 focus:ring-blue-100 outline-none text-center tracking-widest font-bold" placeholder="••••"><button onclick="checkAdminPass()" class="w-full bg-blue-600 text-white font-bold py-5 rounded-2xl shadow-xl active:scale-95 transition">確認進入</button></div>`;
+        };
+
+        window.checkAdminPass = () => {
+            if (document.getElementById('admin-pass').value !== window.CONFIG.ADMIN_PWD) return alert("密碼錯誤");
+            window.openRealAdmin();
+        };
+
+        window.openRealAdmin = () => {
+            document.getElementById('main-content').innerHTML = `<div class="text-center py-20"><div class="spin mx-auto mb-4"></div><p class="text-gray-400 text-sm font-bold">同步雲端數據中...</p></div>`;
             window.watchData((list) => {
-                let html = `<div class="fade text-left"><div class="flex justify-between items-center mb-6"><div><h2 class="text-xl font-bold">統計成果</h2><p class="text-[10px] text-blue-500 font-black">共 ${list.length} 份回覆</p></div><button onclick="dl(window.cache)" class="bg-green-500 text-white text-[10px] px-3 py-2 rounded-lg font-bold">匯出 Excel</button></div><div class="space-y-3 max-h-96 overflow-auto pr-2 scroll">`;
+                let html = `
+                    <div class="fade-in text-left">
+                        <div id="ai-res-area" class="mb-8">
+                            <button id="ai-analyze-btn" onclick='analyzeTrends(${JSON.stringify(list)})' class="w-full py-4 bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-black text-sm rounded-2xl shadow-xl shadow-purple-100 hover:brightness-110 transition">AI 智能分析需求趨勢 ✨</button>
+                        </div>
+                        <div class="flex justify-between items-center mb-6">
+                            <div><h2 class="text-xl font-bold text-gray-800">統計成果報告</h2><p class="text-[10px] text-blue-500 font-black uppercase">目前共收到 ${list.length} 份回覆</p></div>
+                            <button onclick="dl(window.cache)" class="bg-green-500 text-white text-[10px] font-bold px-3 py-2 rounded-lg shadow-sm">匯出 Excel</button>
+                        </div>
+                        <div class="space-y-3 max-h-80 overflow-auto pr-2 scroll">`;
+                
                 list.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
                 list.forEach(r => {
                     html += `<div class="p-4 bg-gray-50 rounded-2xl border border-gray-100 text-xs shadow-sm">
-                        <div class="flex justify-between mb-2"><span class="font-black text-blue-600 bg-white px-2 py-0.5 rounded border border-blue-100">${r.age}</span><span class="text-gray-300 font-normal">${new Date(r.timestamp).toLocaleDateString()}</span></div>
-                        <p class="mb-1 text-gray-700"><b>${r.exp}</b></p>
+                        <div class="flex justify-between mb-2 font-bold"><span class="text-blue-600 bg-white px-2 py-0.5 rounded border border-blue-50">${r.age}</span><span class="text-gray-300 font-normal">${new Date(r.timestamp).toLocaleDateString()}</span></div>
+                        <p class="text-gray-700 mb-1"><b>熟悉度：${r.exp || ''}</b></p>
                         <p class="text-gray-400 italic">"${r.pain || '未填寫'}"</p>
                     </div>`;
                 });
-                document.getElementById('main-content').innerHTML = html + `</div><button onclick="location.reload()" class="mt-8 w-full py-4 text-xs text-gray-400 font-bold bg-gray-100 rounded-xl transition uppercase tracking-widest">離開後台</button></div>`;
+                document.getElementById('main-content').innerHTML = html + `</div><button onclick="location.href='index.html'" class="mt-8 w-full py-4 text-xs text-gray-400 font-black bg-gray-100 rounded-xl transition uppercase tracking-widest">退出管理後台</button></div>`;
                 window.cache = list;
             });
         };
@@ -236,10 +325,12 @@
             let csv = "\ufeff時間,年齡,熟悉度,興趣,方式,時段,痛點\n";
             list.forEach(r => csv += `${r.timestamp},${r.age},${r.exp},"${r.interests}",${r.mode},${r.time},"${r.pain}"\n`);
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "調查成果.csv"; a.click();
+            const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "教會需求統計.csv"; a.click();
         };
 
-        window.onload = syncLabels;
+        window.onload = () => { 
+            document.querySelectorAll('.org-name-label').forEach(el => el.innerText = window.CONFIG.ORG_NAME); 
+        };
     </script>
 </body>
 </html>
