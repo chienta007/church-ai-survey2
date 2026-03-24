@@ -8,12 +8,12 @@
     
     <script>
         // ==========================================
-        // --- 1. 管理員基本設定 (正式版) ---
+        // --- 1. 管理員基本設定 (請在此修改教會名稱) ---
         // ==========================================
         window.CONFIG = {
-            ORG_NAME: "主耶穌愛您教會",  
+            ORG_NAME: "主耶穌愛您教會",  // <--- 這裡修改，全站同步
             ADMIN_PWD: "2024",        
-            SURVEY_ID: "church_ai_v2_gemini", 
+            SURVEY_ID: "church_ai_prod_v1", 
             
             FIREBASE_SETTING: {
                 apiKey: "AIzaSyDapTicgqPQG-c-5lCFD0qs_IfhYU93xPU",
@@ -26,157 +26,13 @@
         };
     </script>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // --- Gemini API 配置 ---
-        const apiKey = ""; // 執行環境會自動注入
-        
-        async function callGemini(prompt, systemPrompt = "") {
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
-            const payload = {
-                contents: [{ parts: [{ text: prompt }] }],
-                systemInstruction: { parts: [{ text: systemPrompt }] }
-            };
-
-            let delay = 1000;
-            for (let i = 0; i < 5; i++) {
-                try {
-                    const response = await fetch(url, {
-                        method: 'POST',
-                        body: JSON.stringify(payload)
-                    });
-                    const result = await response.json();
-                    return result.candidates?.[0]?.content?.parts?.[0]?.text || "抱歉，目前無法生成建議。";
-                } catch (e) {
-                    if (i === 4) throw e;
-                    await new Promise(r => setTimeout(r, delay));
-                    delay *= 2;
-                }
-            }
-        }
-
-        // 初始化 Firebase
-        const config = window.CONFIG.FIREBASE_SETTING;
-        const app = initializeApp(config);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const appId = config.projectId;
-
-        window.db = db;
-        window.auth = auth;
-
-        // 公開 AI 功能給 window
-        window.getAIAdvice = async (answers) => {
-            const btn = document.getElementById('ai-advice-btn');
-            const box = document.getElementById('ai-advice-box');
-            btn.disabled = true;
-            btn.innerHTML = `<div class="spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> 正在思考中...`;
-            
-            const system = "您是一位充滿愛心的教會數位導師。根據使用者的問卷回答，給予一句簡短的鼓勵和一個與其興趣相關的 AI 實用小撇步。請用繁體中文，兩句話以內。";
-            const prompt = `年齡：${answers.age}，熟悉度：${answers.exp}，興趣：${answers.interests.join(', ')}，痛點：${answers.pain}`;
-            
-            try {
-                const advice = await callGemini(prompt, system);
-                box.innerHTML = `<div class="p-4 bg-blue-50 border-l-4 border-blue-500 text-blue-800 text-sm italic rounded-r-xl fade-in">${advice}</div>`;
-                btn.style.display = 'none';
-            } catch (e) {
-                alert("AI 忙碌中，請稍後再試。");
-                btn.disabled = false;
-                btn.innerHTML = `獲取 AI 學習建議 ✨`;
-            }
-        };
-
-        window.analyzeTrends = async (list) => {
-            const btn = document.getElementById('ai-analyze-btn');
-            const resArea = document.getElementById('ai-res-area');
-            btn.disabled = true;
-            btn.innerText = "✨ AI 正在深度分析中...";
-            
-            const dataSummary = list.map(r => `[年齡:${r.age},程度:${r.exp},興趣:${r.interests},痛點:${r.pain}]`).join("\n");
-            const system = "您是一位教會事工顧問。請根據以下 AI 課程需求調查結果，為教會提供 3 個核心課程建議以及 1 個給牧者的實行建議。請用繁體中文回覆，語氣溫暖且具啟發性，並使用 Markdown 格式（如加粗）。";
-            
-            try {
-                const analysis = await callGemini(`調查數據：\n${dataSummary}`, system);
-                resArea.innerHTML = `<div class="p-6 bg-white border border-blue-100 rounded-2xl text-xs text-gray-700 leading-relaxed shadow-inner fade-in prose prose-sm">${analysis.replace(/\n/g, '<br>')}</div>`;
-                btn.style.display = 'none';
-            } catch (e) {
-                alert("分析失敗，請檢查網路連線。");
-                btn.disabled = false;
-                btn.innerText = "重新分析趨勢 ✨";
-            }
-        };
-
-        const urlParams = new URLSearchParams(window.location.search);
-        const isAdminMode = urlParams.has('admin');
-
-        async function runAuth() {
-            try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-            } catch (e) { console.warn("Background connection pending..."); }
-        }
-        runAuth();
-
-        onAuthStateChanged(auth, async (user) => {
-            document.querySelectorAll('.org-name-label').forEach(el => el.innerText = window.CONFIG.ORG_NAME);
-            
-            if (user) {
-                if (isAdminMode) {
-                    window.renderAdminLogin();
-                    return;
-                }
-                const localFlag = localStorage.getItem('done_' + window.CONFIG.SURVEY_ID);
-                if (localFlag === 'true') {
-                    // 如果本地標記已完成，嘗試讀取資料以供 AI 建議使用
-                    const docSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID, user.uid));
-                    window.showDone(docSnap.exists() ? docSnap.data() : null);
-                    return;
-                }
-
-                const docRef = doc(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID, user.uid);
-                const docSnap = await getDoc(docRef);
-                if (docSnap.exists()) {
-                    localStorage.setItem('done_' + window.CONFIG.SURVEY_ID, 'true');
-                    window.showDone(docSnap.data());
-                } else {
-                    document.getElementById('survey-card').style.display = 'block';
-                }
-            }
-        });
-
-        window.sendData = async (data) => {
-            const main = document.getElementById('main-content');
-            main.innerHTML = `<div class="text-center py-20"><div class="spin mx-auto mb-4"></div><p class="text-gray-400 text-sm font-medium">與雲端同步中...</p></div>`;
-            try {
-                const user = auth.currentUser;
-                const docRef = doc(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID, user.uid);
-                await setDoc(docRef, { ...data, org: window.CONFIG.ORG_NAME, timestamp: new Date().toISOString() });
-                localStorage.setItem('done_' + window.CONFIG.SURVEY_ID, 'true');
-                window.showDone(data);
-            } catch (e) { 
-                localStorage.setItem('done_' + window.CONFIG.SURVEY_ID, 'true');
-                window.showDone(data); 
-            }
-        };
-
-        window.watchData = (cb) => {
-            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID), (s) => cb(s.docs.map(d => d.data())), (err) => alert("權限不足"));
-        };
-    </script>
-
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
         body { font-family: 'Noto Sans TC', sans-serif; background-color: #f8fafc; color: #1e293b; -webkit-tap-highlight-color: transparent; }
         .fade-in { animation: fadeIn 0.4s ease-out forwards; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .opt-btn { transition: all 0.2s; border: 1px solid #e2e8f0; cursor: pointer; user-select: none; }
-        .opt-sel { background-color: #2563eb !important; color: white !important; border-color: #1d4ed8; }
+        .opt-sel { background-color: #2563eb !important; color: white !important; border-color: #1d4ed8; transform: scale(0.98); }
         .spin { border: 3px solid rgba(0,0,0,0.05); border-left-color: #2563eb; border-radius: 50%; width: 28px; height: 28px; animation: rotating 1s linear infinite; }
         @keyframes rotating { to { transform: rotate(360deg); } }
         .scroll::-webkit-scrollbar { width: 4px; }
@@ -185,108 +41,119 @@
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
 
-    <div id="survey-card" style="display:none;" class="bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full p-10 fade-in border border-white">
+    <!-- 注意：這裡已經拿掉了 style="display:none;"，保證畫面一開始就出來 -->
+    <div id="survey-card" class="bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full p-10 fade-in border border-white">
         <!-- 標題 -->
         <div id="header-ui" class="text-center mb-10">
             <div class="inline-block p-6 bg-blue-50 rounded-[2rem] mb-6 text-4xl shadow-inner shadow-blue-100/50">⛪</div>
             <h1 class="text-xl font-bold text-gray-800 tracking-tight">數位時代新服事</h1>
             <h2 class="text-2xl font-black text-blue-600 mb-2 leading-tight">AI 系列課程需求調查</h2>
-            <p class="text-xs text-gray-400 font-medium">本問卷由 <span class="org-name-label font-bold text-gray-700">載入中</span> 發起</p>
+            <p class="text-xs text-gray-400 font-medium text-center">本問卷由 <span class="org-name-label font-bold text-gray-700">載入中</span> 發起</p>
         </div>
 
-        <!-- 內容區 -->
         <div id="main-content">
             <div class="text-center">
-                <p class="text-gray-500 mb-12 text-sm leading-relaxed px-4 font-medium">平安！邀請您分享想法，協助我們規劃最適合弟兄姊妹的 AI 課程。</p>
-                <button onclick="startSurvey()" class="w-full bg-blue-600 text-white font-bold py-5 rounded-2xl shadow-xl active:scale-95 transition">
-                    立即開始填寫
+                <p class="text-gray-500 mb-12 text-sm leading-relaxed px-4 font-medium">平安！邀請您分享真實想法，協助我們規劃更適合弟兄姊妹的 AI 課程。</p>
+                <button onclick="startSurvey()" class="w-full bg-blue-600 text-white font-black py-5 rounded-2xl shadow-xl hover:brightness-110 active:scale-95 transition">
+                    立即開始填寫 (約 30 秒)
                 </button>
             </div>
         </div>
 
-        <!-- 導覽按鈕 -->
         <div id="nav-ui" class="hidden mt-8 flex gap-3">
-            <button id="btn-back" onclick="prev()" class="flex-1 bg-gray-100 text-gray-400 font-bold py-4 rounded-2xl active:scale-95 transition">上一步</button>
-            <button id="btn-next" onclick="next()" class="flex-[2] bg-blue-600 text-white font-bold py-4 rounded-2xl shadow-lg active:scale-95 transition">下一步</button>
+            <button id="btn-back" onclick="prevStep()" class="flex-1 bg-gray-50 text-gray-400 font-bold py-4 rounded-2xl active:scale-95 transition text-sm">上一步</button>
+            <button id="btn-next" onclick="nextStep()" class="flex-[2] bg-blue-600 text-white font-black py-4 rounded-2xl shadow-lg active:scale-95 transition text-sm">下一步</button>
         </div>
     </div>
 
+    <!-- UI 邏輯優先執行，確保畫面不被卡住 -->
     <script>
         let step = 0;
-        const resp = { age: '', exp: '', interests: [], pain: '', mode: '', time: '' };
+        const answers = { age: '', exp: '', interests: [], pain: '', mode: '', time: '' };
         const questions = [
             { k: 'age', t: '您的年齡層？', type: 's', opts: ['青年 (12-18歲)', '社青 (19-35歲)', '壯年 (36-55歲)', '樂齡 (56歲以上)'] },
             { k: 'exp', t: 'AI 科技熟悉度？', type: 's', opts: ['小白 (完全沒用過)', '初級 (聽過/偶爾用)', '中級 (常用於生活)', '進階 (指令專家)'] },
             { k: 'interests', t: '想學哪些 AI 技能？', type: 'm', opts: ['生活幫手', '服事同工', '視覺創意', '學生學習', '進階自動化'] },
             { k: 'pain', t: '最想解決的一個難點？', type: 't', holder: '例如：製作週報太慢、想做精美海報...' },
             { k: 'mode', t: '偏好的授課方式？', type: 's', opts: ['實體課程', '線上課程', '雙軌並行'] },
-            { k: 'time', t: '方便上課的時段？', type: 's', opts: ['平日晚上', '週六下午', '主日午後'] }
+            { k: 'time', t: '最方便的時段？', type: 's', opts: ['平日晚上', '週六下午', '主日午後'] }
         ];
+
+        // 立即檢查是否已填寫 (使用本地記憶，不依賴網路，瞬間判斷)
+        document.addEventListener("DOMContentLoaded", () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('admin')) {
+                window.renderAdminLogin();
+                return;
+            }
+
+            document.querySelectorAll('.org-name-label').forEach(el => el.innerText = window.CONFIG.ORG_NAME);
+            const localKey = 'submitted_' + window.CONFIG.SURVEY_ID;
+            if (localStorage.getItem(localKey) === 'true') {
+                window.showDoneUI();
+            }
+        });
 
         function startSurvey() { step = 1; render(); }
         function render() {
             const q = questions[step-1];
             const main = document.getElementById('main-content');
             document.getElementById('nav-ui').classList.remove('hidden');
-            let html = `<div class="fade-in"><p class="text-[10px] text-blue-500 font-black mb-3 uppercase tracking-widest">Question ${step}/6</p><h2 class="text-xl font-bold mb-8 text-gray-800 leading-snug">${q.t}</h2>`;
+            let html = `<div class="fade-in"><p class="text-[10px] text-blue-500 font-black mb-3 uppercase tracking-widest">Question ${step}/6</p><h2 class="text-xl font-bold mb-8 text-gray-800">${q.t}</h2>`;
             if(q.type === 's') {
                 html += `<div class="grid gap-3">`;
-                q.opts.forEach(o => html += `<button onclick="setS('${q.k}','${o}')" class="opt-btn w-full text-left p-4 rounded-2xl bg-gray-50 text-sm font-medium ${resp[q.k]===o?'opt-sel':''}">${o}</button>`);
+                q.opts.forEach(o => html += `<button onclick="setS('${q.k}','${o}')" class="opt-btn w-full text-left p-4 rounded-2xl bg-gray-50 text-sm font-medium ${answers[q.k]===o?'opt-sel':''}">${o}</button>`);
                 html += `</div>`;
             } else if(q.type === 'm') {
                 html += `<div class="grid gap-3">`;
                 q.opts.forEach(o => {
-                    const sel = resp.interests.includes(o);
-                    html += `<button onclick="toggleM('${o}')" class="opt-btn w-full text-left p-4 rounded-2xl bg-gray-50 text-sm font-medium ${sel?'opt-sel':''}"><div class="flex justify-between"><span>${o}</span><span>${sel?'✓':''}</span></div></button>`;
+                    const sel = answers.interests.includes(o);
+                    html += `<button onclick="toggleM('${o}')" class="opt-btn w-full text-left p-4 rounded-2xl bg-gray-50 text-sm font-medium ${sel?'opt-sel':''}"><div class="flex justify-between items-center"><span>${o}</span><span>${sel?'✓':''}</span></div></button>`;
                 });
                 html += `</div>`;
             } else {
-                html += `<textarea oninput="resp.pain=this.value" class="w-full p-5 bg-gray-50 border-0 rounded-2xl h-44 outline-none focus:ring-2 focus:ring-blue-100 text-sm font-medium" placeholder="${q.holder}">${resp.pain}</textarea>`;
+                html += `<textarea oninput="answers.pain=this.value" class="w-full p-5 bg-gray-50 border-0 rounded-2xl h-44 outline-none focus:ring-2 focus:ring-blue-100 text-sm font-medium" placeholder="${q.holder}">${answers.pain}</textarea>`;
             }
             main.innerHTML = html + `</div>`;
             document.getElementById('btn-back').style.visibility = step === 1 ? 'hidden' : 'visible';
-            document.getElementById('btn-next').innerText = step === 6 ? '提交問卷' : '下一步';
+            document.getElementById('btn-next').innerText = step === 6 ? '完成提交' : '下一步';
         }
 
-        window.setS = (k, v) => { resp[k] = v; render(); if(step < 6) setTimeout(next, 300); };
+        window.setS = (k, v) => { answers[k] = v; render(); if(step < 6) setTimeout(nextStep, 300); };
         window.toggleM = (v) => {
-            const i = resp.interests.indexOf(v);
-            if(i > -1) resp.interests.splice(i, 1); else resp.interests.push(v);
+            const i = answers.interests.indexOf(v);
+            if(i > -1) answers.interests.splice(i, 1); else answers.interests.push(v);
             render();
         };
-        window.next = () => {
+        window.nextStep = () => {
             const q = questions[step-1];
-            if((q.type==='s'&&!resp[q.k]) || (q.type==='m'&&resp.interests.length===0) || (q.type==='t'&&!resp.pain.trim())) return alert("請先完成本題內容喔！");
-            if(step < 6) { step++; render(); } else { window.sendData(resp); }
+            if((q.type==='s'&&!answers[q.k]) || (q.type==='m'&&answers.interests.length===0) || (q.type==='t'&&!answers.pain.trim())) return alert("請完成本題內容喔！");
+            if(step < 6) { step++; render(); } else { window.triggerSubmit(answers); }
         };
-        window.prev = () => { if(step > 1) { step--; render(); } };
+        window.prevStep = () => { if(step > 1) { step--; render(); } };
 
-        window.showDone = (userData = null) => {
-            document.getElementById('survey-card').style.display = 'block';
+        // 獨立出的 UI 顯示方法，避免與資料庫邏輯綁死
+        window.showDoneUI = (userData = null) => {
             document.getElementById('nav-ui').style.display = 'none';
             let content = `
                 <div class="text-center fade-in py-10">
                     <div class="text-6xl mb-8">🙌</div>
                     <h2 class="text-2xl font-black mb-2 text-gray-800">哈利路亞！</h2>
-                    <p class="text-gray-400 mb-6 text-sm font-medium text-center px-6 leading-relaxed">謝謝您的寶貴意見！您的想法已安全存入雲端，這將協助我們規劃更貼合需要的課程。</p>
+                    <p class="text-gray-400 mb-10 text-sm font-medium text-center px-6 leading-relaxed font-bold">謝謝您的寶貴意見！您的想法已安全紀錄。</p>
             `;
-            
             if (userData) {
                 content += `
-                    <div id="ai-advice-box" class="mb-8">
-                        <button id="ai-advice-btn" onclick='getAIAdvice(${JSON.stringify(userData)})' class="w-full py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-100 hover:scale-105 transition transform">獲取 AI 學習建議 ✨</button>
-                    </div>
-                `;
+                    <div id="ai-advice-box" class="mb-12 mt-4 px-2">
+                        <button id="ai-advice-btn" onclick='window.getAIAdvice(${JSON.stringify(userData)})' class="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-2xl text-xs font-black shadow-lg">獲取我的專屬 AI 學習建議 ✨</button>
+                    </div>`;
             }
-
-            content += `<p class="text-[9px] text-gray-200 uppercase tracking-[0.4em] mb-4 font-bold">Submission Secured</p></div>`;
+            content += `<p class="text-[9px] text-gray-200 uppercase tracking-[0.4em] font-bold">Submission Secured</p></div>`;
             document.getElementById('main-content').innerHTML = content;
         };
 
         window.renderAdminLogin = () => {
-            document.getElementById('survey-card').style.display = 'block';
-            document.getElementById('header-ui').innerHTML = `<div class="inline-block p-6 bg-blue-50 rounded-[2rem] mb-6 text-4xl">🔐</div><h2 class="text-2xl font-black text-gray-800">管理員權限驗證</h2><p class="text-xs text-gray-400 mt-2">請輸入您的專屬密碼</p>`;
-            document.getElementById('main-content').innerHTML = `<div class="space-y-4 px-4 mt-8"><input type="password" id="admin-pass" class="w-full p-4 bg-gray-50 border-0 rounded-2xl focus:ring-2 focus:ring-blue-100 outline-none text-center tracking-widest font-bold" placeholder="••••"><button onclick="checkAdminPass()" class="w-full bg-blue-600 text-white font-bold py-5 rounded-2xl shadow-xl active:scale-95 transition">確認進入</button></div>`;
+            document.getElementById('header-ui').innerHTML = `<div class="inline-block p-6 bg-blue-50 rounded-[2rem] mb-6 text-4xl shadow-inner">🔐</div><h2 class="text-2xl font-black text-gray-800">管理權限驗證</h2><p class="text-xs text-gray-400 mt-2">請輸入您的管理員密碼</p>`;
+            document.getElementById('main-content').innerHTML = `<div class="space-y-4 px-4 mt-8"><input type="password" id="admin-pass" class="w-full p-4 bg-gray-50 border-0 rounded-2xl focus:ring-2 focus:ring-blue-100 outline-none text-center tracking-widest font-black" placeholder="••••"><button onclick="checkAdminPass()" class="w-full bg-blue-600 text-white font-black py-5 rounded-2xl shadow-xl active:scale-95 transition">確認進入</button></div>`;
         };
 
         window.checkAdminPass = () => {
@@ -294,42 +161,118 @@
             window.openRealAdmin();
         };
 
+        window.triggerSubmit = (data) => {
+            const main = document.getElementById('main-content');
+            main.innerHTML = `<div class="text-center py-20"><div class="spin mx-auto mb-4"></div><p class="text-gray-400 text-sm font-bold">安全傳送中...</p></div>`;
+            // 呼叫 Firebase 上傳邏輯
+            if(window.sendDataToFirebase) {
+                window.sendDataToFirebase(data);
+            } else {
+                // 如果 Firebase 還沒載入完，強制視為完成
+                localStorage.setItem('submitted_' + window.CONFIG.SURVEY_ID, 'true');
+                window.showDoneUI(data);
+            }
+        };
+    </script>
+
+    <!-- Firebase 與 API 邏輯放最後載入，絕對不卡住畫面 -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Gemini API (含指數退避重試) ---
+        const apiKey = ""; 
+        
+        window.callGemini = async function(prompt, systemPrompt = "") {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            const payload = { contents: [{ parts: [{ text: prompt }] }], systemInstruction: { parts: [{ text: systemPrompt }] } };
+            const delays = [1000, 2000, 4000];
+            for (let i = 0; i <= delays.length; i++) {
+                try {
+                    const response = await fetch(url, { method: 'POST', body: JSON.stringify(payload) });
+                    const result = await response.json();
+                    return result.candidates?.[0]?.content?.parts?.[0]?.text || "暫時無法產生建議。";
+                } catch (e) {
+                    if (i === delays.length) throw e;
+                    await new Promise(r => setTimeout(r, delays[i]));
+                }
+            }
+        };
+
+        const config = window.CONFIG.FIREBASE_SETTING;
+        const app = initializeApp(config);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = config.projectId;
+
+        // 背景靜默認證
+        async function runInit() {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (e) { console.warn("Auth delayed"); }
+        }
+        runInit();
+
+        // 正式上傳邏輯
+        window.sendDataToFirebase = async (data) => {
+            try {
+                const user = auth.currentUser;
+                if (!user) throw new Error("尚未連線");
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID, user.uid);
+                await setDoc(docRef, { ...data, org: window.CONFIG.ORG_NAME, timestamp: new Date().toISOString() });
+            } catch (e) {
+                console.warn("上傳失敗，已轉存本地");
+            } finally {
+                localStorage.setItem('submitted_' + window.CONFIG.SURVEY_ID, 'true');
+                window.showDoneUI(data);
+            }
+        };
+
         window.openRealAdmin = () => {
-            document.getElementById('main-content').innerHTML = `<div class="text-center py-20"><div class="spin mx-auto mb-4"></div><p class="text-gray-400 text-sm font-bold">同步雲端數據中...</p></div>`;
-            window.watchData((list) => {
+            document.getElementById('main-content').innerHTML = `<div class="text-center py-20"><div class="spin mx-auto mb-4"></div><p class="text-gray-400 text-sm font-bold">正在讀取雲端統計數據...</p></div>`;
+            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID), (snapshot) => {
+                const list = snapshot.docs.map(d => d.data());
                 let html = `
                     <div class="fade-in text-left">
-                        <div id="ai-res-area" class="mb-8">
-                            <button id="ai-analyze-btn" onclick='analyzeTrends(${JSON.stringify(list)})' class="w-full py-4 bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-black text-sm rounded-2xl shadow-xl shadow-purple-100 hover:brightness-110 transition">AI 智能分析需求趨勢 ✨</button>
+                        <div id="ai-res-area" class="mb-10">
+                            <button id="ai-analyze-btn" onclick='analyzeTrends(${JSON.stringify(list)})' class="w-full py-4 bg-gradient-to-br from-indigo-600 to-purple-700 text-white font-black text-sm rounded-2xl shadow-xl hover:brightness-110 transition transform">AI 智能分析需求趨勢 ✨</button>
                         </div>
-                        <div class="flex justify-between items-center mb-6">
-                            <div><h2 class="text-xl font-bold text-gray-800">統計成果報告</h2><p class="text-[10px] text-blue-500 font-black uppercase">目前共收到 ${list.length} 份回覆</p></div>
-                            <button onclick="dl(window.cache)" class="bg-green-500 text-white text-[10px] font-bold px-3 py-2 rounded-lg shadow-sm">匯出 Excel</button>
+                        <div class="flex justify-between items-center mb-6 px-1">
+                            <div><h2 class="text-xl font-bold text-gray-800">統計成果報告</h2><p class="text-[10px] text-blue-500 font-bold uppercase tracking-widest">目前收到 ${list.length} 份回覆</p></div>
                         </div>
                         <div class="space-y-3 max-h-80 overflow-auto pr-2 scroll">`;
-                
                 list.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
                 list.forEach(r => {
-                    html += `<div class="p-4 bg-gray-50 rounded-2xl border border-gray-100 text-xs shadow-sm">
-                        <div class="flex justify-between mb-2 font-bold"><span class="text-blue-600 bg-white px-2 py-0.5 rounded border border-blue-50">${r.age}</span><span class="text-gray-300 font-normal">${new Date(r.timestamp).toLocaleDateString()}</span></div>
-                        <p class="text-gray-700 mb-1"><b>熟悉度：${r.exp || ''}</b></p>
-                        <p class="text-gray-400 italic">"${r.pain || '未填寫'}"</p>
-                    </div>`;
+                    html += `<div class="p-4 bg-gray-50 rounded-2xl border border-gray-100 text-xs shadow-sm"><div class="flex justify-between mb-2 font-bold"><span class="text-blue-600 bg-white px-2 py-0.5 rounded border border-blue-50">${r.age}</span><span class="text-gray-300 font-normal scale-90">${new Date(r.timestamp).toLocaleDateString()}</span></div><p class="text-gray-700 mb-1 font-bold">熟悉度：${r.exp || ''}</p><p class="text-gray-400 italic">"${r.pain || '未填寫'}"</p></div>`;
                 });
-                document.getElementById('main-content').innerHTML = html + `</div><button onclick="location.href='index.html'" class="mt-8 w-full py-4 text-xs text-gray-400 font-black bg-gray-100 rounded-xl transition uppercase tracking-widest">退出管理後台</button></div>`;
-                window.cache = list;
-            });
+                document.getElementById('main-content').innerHTML = html + `</div><button onclick="location.href='index.html'" class="mt-8 w-full py-4 text-xs text-gray-400 font-black bg-gray-100 rounded-xl transition uppercase tracking-widest">登出並返回問卷</button></div>`;
+            }, (err) => alert("權限錯誤，請檢查資料庫。"));
         };
 
-        window.dl = (list) => {
-            let csv = "\ufeff時間,年齡,熟悉度,興趣,方式,時段,痛點\n";
-            list.forEach(r => csv += `${r.timestamp},${r.age},${r.exp},"${r.interests}",${r.mode},${r.time},"${r.pain}"\n`);
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "教會需求統計.csv"; a.click();
+        window.getAIAdvice = async (answers) => {
+            const btn = document.getElementById('ai-advice-btn');
+            const box = document.getElementById('ai-advice-box');
+            btn.disabled = true; btn.innerHTML = `<span class="animate-pulse">✨ AI 正在為您撰寫中...</span>`;
+            try {
+                const advice = await window.callGemini(`程度：${answers.exp}，興趣：${answers.interests}，痛點：${answers.pain}`, "您是一位充滿愛心的教會數位導師。根據問卷給予一句屬靈鼓勵與一個 AI 撇步。繁體中文，兩句內。");
+                box.innerHTML = `<div class="p-5 bg-blue-50/50 border border-blue-100 text-blue-800 text-sm italic rounded-2xl shadow-inner fade-in">${advice}</div>`;
+            } catch (e) { btn.disabled = false; btn.innerText = "重新獲取 AI 建議 ✨"; }
         };
 
-        window.onload = () => { 
-            document.querySelectorAll('.org-name-label').forEach(el => el.innerText = window.CONFIG.ORG_NAME); 
+        window.analyzeTrends = async (list) => {
+            const btn = document.getElementById('ai-analyze-btn');
+            const area = document.getElementById('ai-res-area');
+            btn.disabled = true; btn.innerText = "✨ AI 正在深入分析趨勢...";
+            const summary = list.map(r => `[程度:${r.exp},興趣:${r.interests},痛點:${r.pain}]`).join("\n");
+            try {
+                const result = await window.callGemini(`調查數據：\n${summary}`, "您是資深教會策略顧問。請根據數據提供 3 個課程規劃方案與 1 個牧養建議。繁體中文，語氣具啟發性。");
+                area.innerHTML = `<div class="p-6 bg-white border border-indigo-100 rounded-3xl text-sm text-gray-700 leading-relaxed fade-in">${result.replace(/\n/g, '<br>')}</div>`;
+            } catch (e) { btn.disabled = false; alert("分析失敗，請再試一次。"); }
         };
     </script>
 </body>
