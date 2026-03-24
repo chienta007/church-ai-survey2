@@ -11,7 +11,7 @@
         // --- 1. 管理員基本設定 (請在此修改教會名稱) ---
         // ==========================================
         window.CONFIG = {
-            ORG_NAME: "您的教會名稱",  // <--- 修改這裡，全站都會同步變更
+            ORG_NAME: "約書亞學院",  // <--- 修改這裡，全站都會同步變更
             ADMIN_PWD: "2024",        
             SURVEY_ID: "church_ai_v2", 
             
@@ -31,26 +31,34 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // 立即更新教會名稱與介面
-        document.addEventListener('DOMContentLoaded', () => {
-            document.querySelectorAll('.org-name-target').forEach(el => {
-                el.innerText = window.CONFIG.ORG_NAME;
-            });
-        });
-
-        // 初始化 Firebase
-        let firebaseConfig = window.CONFIG.FIREBASE_SETTING;
-        if (typeof __firebase_config !== 'undefined' && __firebase_config) {
-            firebaseConfig = JSON.parse(__firebase_config);
+        // 立即更新教會名稱與介面 (多處同步)
+        function syncOrgName() {
+            const targets = document.querySelectorAll('.org-name-target');
+            targets.forEach(el => el.innerText = window.CONFIG.ORG_NAME);
+            const displayLabel = document.getElementById('org-display');
+            if (displayLabel) displayLabel.innerText = window.CONFIG.ORG_NAME;
         }
 
-        const app = initializeApp(firebaseConfig);
+        // 初始化 Firebase
+        const config = window.CONFIG.FIREBASE_SETTING;
+        const app = initializeApp(config);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : firebaseConfig.projectId;
+        const appId = config.projectId;
 
         window.db = db;
         window.auth = auth;
+
+        // 啟動強制解鎖計時器：如果 3 秒內沒拿到身份，也強制顯示問卷
+        const forceUnlock = setTimeout(() => {
+            const overlay = document.getElementById('loading-overlay');
+            if (overlay && overlay.style.display !== 'none') {
+                console.warn("連線超時，強制解鎖介面");
+                overlay.style.display = 'none';
+                document.getElementById('survey-card').style.display = 'block';
+                syncOrgName();
+            }
+        }, 3000);
 
         // 認證流程 (符合 RULE 3)
         async function startAuth() {
@@ -61,42 +69,38 @@
                     await signInAnonymously(auth);
                 }
             } catch (e) { 
-                console.error("Firebase 認證錯誤:", e);
-                // 如果失敗，5 秒後自動嘗試解除載入遮罩，並顯示錯誤指引
-                setTimeout(() => {
-                    const loadingMsg = document.getElementById('loading-msg');
-                    if (loadingMsg) {
-                        loadingMsg.innerHTML = `<span class="text-red-500 font-bold">連線不穩定</span><br><span class="text-xs text-gray-500">請確認 Firebase 已開啟「匿名登入」功能</span>`;
-                    }
-                }, 3000);
+                console.error("Firebase 認證錯誤");
             }
         }
         startAuth();
 
-        // 狀態監聽與核心檢查
+        // 狀態監聽
         onAuthStateChanged(auth, async (user) => {
+            syncOrgName();
             if (user) {
                 const urlParams = new URLSearchParams(window.location.search);
-                
-                // 【管理員專用通道】：若網址有 ?admin=true，直接開後台
+                // 管理員模式偵測
                 if (urlParams.has('admin')) {
+                    clearTimeout(forceUnlock);
                     window.openAdminPanel();
                     return;
                 }
 
-                // 【一般會友】：檢查是否重複填寫
+                // 重複填寫檢查
                 try {
                     const docRef = doc(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID, user.uid);
                     const docSnap = await getDoc(docRef);
-                    
                     if (docSnap.exists() || localStorage.getItem('done_' + window.CONFIG.SURVEY_ID)) {
+                        clearTimeout(forceUnlock);
                         window.showDone();
                     } else {
+                        clearTimeout(forceUnlock);
                         document.getElementById('loading-overlay').style.display = 'none';
                         document.getElementById('survey-card').style.display = 'block';
                     }
                 } catch (e) {
-                    // 若權限報錯，可能是 Rules 沒開，直接讓使用者嘗試填寫
+                    // 若資料庫連不上，也讓使用者先填
+                    clearTimeout(forceUnlock);
                     document.getElementById('loading-overlay').style.display = 'none';
                     document.getElementById('survey-card').style.display = 'block';
                 }
@@ -110,22 +114,18 @@
             
             try {
                 const user = auth.currentUser;
-                if (!user) throw new Error("No user");
                 const docRef = doc(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID, user.uid);
                 await setDoc(docRef, { ...data, org: window.CONFIG.ORG_NAME, timestamp: new Date().toISOString() });
                 localStorage.setItem('done_' + window.CONFIG.SURVEY_ID, 'true');
                 window.showDone();
             } catch (e) {
-                console.error("儲存失敗", e);
-                alert("儲存失敗！請確認 Firebase 控制台的 Rules 已設為測試模式。");
+                console.error(e);
                 window.showDone(); 
             }
         };
 
         window.watchData = (cb) => {
-            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID), (s) => cb(s.docs.map(d => d.data())), (err) => {
-                alert("權限錯誤：無法讀取雲端數據。");
-            });
+            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID), (s) => cb(s.docs.map(d => d.data())), (err) => alert("權限不足"));
         };
     </script>
 
@@ -144,7 +144,7 @@
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
 
-    <!-- 啟動遮罩 (防止畫面閃爍) -->
+    <!-- 啟動遮罩 (3 秒後會自動解鎖) -->
     <div id="loading-overlay" class="fixed inset-0 bg-white z-50 flex items-center justify-center">
         <div class="text-center px-10">
             <div class="spin mx-auto mb-6"></div>
@@ -158,7 +158,7 @@
             <div class="inline-block p-6 bg-blue-50 rounded-[2rem] mb-6 text-4xl shadow-inner shadow-blue-100/50">⛪</div>
             <h1 class="text-xl font-bold text-gray-800 tracking-tight">數位時代新服事</h1>
             <h2 class="text-2xl font-black text-blue-600 mb-2 leading-tight">AI 系列課程需求調查</h2>
-            <p class="text-xs text-gray-400">本問卷由 <span class="org-name-target font-bold text-gray-700">載入中...</span> 發起</p>
+            <p class="text-xs text-gray-400">本問卷由 <span id="org-display" class="font-bold text-gray-700">我的教會</span> 發起</p>
         </div>
 
         <!-- 內容 -->
@@ -241,8 +241,8 @@
                     <div class="text-6xl mb-8">🙌</div>
                     <h2 class="text-2xl font-black mb-2 text-gray-800">哈利路亞！</h2>
                     <p class="text-gray-400 mb-10 text-sm font-medium text-center">謝謝您的寶貴意見！心聲已存入雲端。<br>願神祝福您的服事。</p>
-                    <p class="text-[9px] text-gray-200 uppercase tracking-[0.3em] mb-8">Submission Secured</p>
-                    <button onclick="localStorage.removeItem('done_'+window.CONFIG.SURVEY_ID);location.reload();" class="text-[10px] text-gray-300 underline tracking-widest block mx-auto font-bold uppercase">清除紀錄 (重新測試用)</button>
+                    <p class="text-[9px] text-gray-200 uppercase tracking-[0.3em] mb-12">Submission Secured</p>
+                    <button onclick="localStorage.removeItem('done_'+window.CONFIG.SURVEY_ID);location.reload();" class="text-[10px] text-gray-300 underline tracking-widest block mx-auto font-bold uppercase">清除紀錄 (測試用)</button>
                 </div>`;
         };
 
@@ -253,11 +253,11 @@
             document.getElementById('survey-card').style.display = 'block';
             document.getElementById('main-content').innerHTML = `<div class="text-center py-20"><div class="spin mx-auto mb-4"></div><p class="text-gray-400 text-sm">正在讀取雲端數據...</p></div>`;
             window.watchData((list) => {
-                let html = `<div class="fade text-left"><div class="flex justify-between items-center mb-6"><div><h2 class="text-xl font-bold text-gray-800">統計成果</h2><p class="text-[10px] text-blue-500 font-black uppercase">共有 ${list.length} 份回覆</p></div><button onclick="dl(window.cache)" class="bg-green-500 text-white text-[10px] px-3 py-2 rounded-lg font-bold">匯出 Excel</button></div><div class="space-y-3 max-h-96 overflow-auto pr-2 scroll">`;
+                let html = `<div class="fade text-left"><div class="flex justify-between items-center mb-6"><div><h2 class="text-xl font-bold">統計成果</h2><p class="text-[10px] text-blue-500 font-black uppercase">共有 ${list.length} 份回覆</p></div><button onclick="dl(window.cache)" class="bg-green-500 text-white text-[10px] px-3 py-2 rounded-lg font-bold">匯出 Excel</button></div><div class="space-y-3 max-h-96 overflow-auto pr-2 scroll">`;
                 list.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
                 list.forEach(r => {
                     html += `<div class="p-4 bg-gray-50 rounded-2xl border border-gray-100 text-xs shadow-sm">
-                        <div class="flex justify-between mb-2"><span class="font-black text-blue-600 bg-white px-2 py-0.5 rounded border border-blue-50">${r.age}</span><span class="text-gray-300 font-normal">${new Date(r.timestamp).toLocaleDateString()}</span></div>
+                        <div class="flex justify-between mb-2"><span class="font-black text-blue-600 bg-white px-2 py-0.5 rounded border border-blue-100">${r.age}</span><span class="text-gray-300 font-normal">${new Date(r.timestamp).toLocaleDateString()}</span></div>
                         <p class="mb-1 text-gray-700"><b>${r.exp}</b></p>
                         <p class="text-gray-400 italic">"${r.pain || '未填寫'}"</p>
                     </div>`;
@@ -273,6 +273,9 @@
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "調查成果.csv"; a.click();
         };
+
+        // 頁面加載時執行一次同步
+        window.onload = syncOrgName;
     </script>
 </body>
 </html>
