@@ -13,11 +13,17 @@
         // ==========================================
         // --- 1. 管理員基本設定區 ---
         // ==========================================
-        const ORG_NAME = "我的教會-002";      // 顯示在網頁上的名稱
-        const ADMIN_CODE = "2026-2";       // 管理員查看數據的密碼
+        const ORG_NAME = "我的教會";      // 顯示在網頁上的名稱
+        const ADMIN_CODE = "2024";       // 管理員查看數據的密碼
         const SURVEY_ID = "church-001";  // 數據識別碼
         // ==========================================
 
+        // 將設定掛載到 window 確保全域可用
+        window.ORG_NAME = ORG_NAME;
+        window.ADMIN_CODE = ADMIN_CODE;
+        window.SURVEY_ID = SURVEY_ID;
+
+        // 初始化 Firebase
         const firebaseConfig = JSON.parse(__firebase_config);
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
@@ -27,9 +33,12 @@
         window.db = db;
         window.auth = auth;
         window.appId = appId;
-        window.SURVEY_ID = SURVEY_ID;
-        window.ADMIN_CODE = ADMIN_CODE;
-        window.ORG_NAME = ORG_NAME;
+
+        // 立即更新介面上的組織名稱，避免顯示 undefined
+        document.addEventListener('DOMContentLoaded', () => {
+            const el = document.getElementById('display-org');
+            if (el) el.innerText = window.ORG_NAME;
+        });
 
         const initAuth = async () => {
             if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
@@ -48,7 +57,6 @@
         });
 
         async function checkSubmissionStatus(uid) {
-            // 同時檢查本地標記與雲端資料
             const localSubmitted = localStorage.getItem('submitted_' + SURVEY_ID);
             const docRef = doc(db, 'artifacts', appId, 'public', 'data', SURVEY_ID, uid);
             const docSnap = await getDoc(docRef);
@@ -64,7 +72,7 @@
             const docRef = doc(db, 'artifacts', appId, 'public', 'data', SURVEY_ID, uid);
             await setDoc(docRef, { 
                 ...data, 
-                organization: ORG_NAME, 
+                organization: window.ORG_NAME, 
                 timestamp: new Date().toISOString() 
             });
             localStorage.setItem('submitted_' + SURVEY_ID, 'true');
@@ -92,6 +100,7 @@
 <body class="min-h-screen flex items-center justify-center p-4">
 
     <div id="survey-container" class="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-8 fade-in overflow-hidden relative">
+        <!-- 進度條 -->
         <div id="progress-bar-container" class="hidden mb-6">
             <div class="flex justify-between text-[10px] text-gray-400 mb-1 uppercase tracking-widest font-bold">
                 <span id="progress-text">STEP 0/6</span>
@@ -102,6 +111,7 @@
             </div>
         </div>
 
+        <!-- 內容區 -->
         <div id="content">
             <div class="text-center">
                 <div class="inline-block p-4 bg-blue-50 rounded-full mb-6 text-3xl">⛪</div>
@@ -126,6 +136,7 @@
             </div>
         </div>
 
+        <!-- 導覽按鈕 -->
         <div id="nav-buttons" class="hidden mt-8 flex justify-between gap-3">
             <button id="prev-btn" onclick="prevStep()" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-500 font-medium py-3 rounded-xl transition">上一步</button>
             <button id="next-btn" onclick="nextStep()" class="flex-[2] bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl shadow-md transition">下一步</button>
@@ -133,11 +144,6 @@
     </div>
 
     <script>
-        setTimeout(() => {
-            const el = document.getElementById('display-org');
-            if (el) el.innerText = window.ORG_NAME;
-        }, 100);
-        
         let currentStep = 0;
         const surveyData = { age: '', experience: '', interests: [], painPoint: '', mode: '', preferredTime: '' };
 
@@ -159,8 +165,8 @@
                     <p class="text-sm text-gray-400 mb-10">您的意見已存入雲端，謝謝！</p>
                     
                     <div class="space-y-4">
-                        <button onclick="openAdmin()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl shadow-lg">進入後台統計</button>
-                        <button onclick="resetMyRecord()" class="text-[10px] text-gray-300 hover:text-blue-500 underline uppercase tracking-widest">清除本機紀錄 (測試用)</button>
+                        <button onclick="openAdmin()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl shadow-lg active:scale-95 transition">進入後台統計</button>
+                        <button onclick="resetMyRecord()" class="text-[10px] text-gray-300 hover:text-blue-500 underline uppercase tracking-widest mt-4">清除本機紀錄 (測試用)</button>
                     </div>
                 </div>`;
             document.getElementById('nav-buttons').classList.add('hidden');
@@ -203,15 +209,20 @@
                 });
                 html += `</div>`;
             } else if (step.type === 'text') {
-                html += `<textarea id="text-input" oninput="surveyData.painPoint = this.value" class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl h-40 text-sm" placeholder="${step.placeholder}">${surveyData[step.id]}</textarea>`;
+                html += `<textarea id="text-input" oninput="surveyData.painPoint = this.value" class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl h-40 text-sm focus:ring-2 focus:ring-blue-100 outline-none" placeholder="${step.placeholder}">${surveyData[step.id]}</textarea>`;
             }
             html += `</div>`;
             content.innerHTML = html;
             document.getElementById('prev-btn').style.visibility = currentStep === 1 ? 'hidden' : 'visible';
-            document.getElementById('next-btn').innerText = currentStep === steps.length ? '送出' : '下一步';
+            document.getElementById('next-btn').innerText = currentStep === steps.length ? '確認送出' : '下一步';
         }
 
-        function selectSingle(k, v) { surveyData[k] = v; renderStep(); setTimeout(() => { if (currentStep < steps.length) nextStep(); }, 300); }
+        function selectSingle(k, v) { 
+            surveyData[k] = v; 
+            renderStep(); 
+            setTimeout(() => { if (currentStep < steps.length) nextStep(); }, 300); 
+        }
+        
         function toggleMulti(v) {
             const i = surveyData.interests.indexOf(v);
             if (i > -1) surveyData.interests.splice(i, 1);
@@ -221,7 +232,7 @@
 
         function nextStep() {
             const s = steps[currentStep - 1];
-            if ((s.type === 'single' && !surveyData[s.id]) || (s.type === 'multi' && surveyData.interests.length === 0) || (s.type === 'text' && !surveyData.painPoint.trim())) return alert('請先填寫內容');
+            if ((s.type === 'single' && !surveyData[s.id]) || (s.type === 'multi' && surveyData.interests.length === 0) || (s.type === 'text' && !surveyData.painPoint.trim())) return alert('請先完成目前的選項喔！');
             if (currentStep < steps.length) { currentStep++; renderStep(); } 
             else { submitFinal(); }
         }
@@ -234,14 +245,15 @@
             content.innerHTML = `<div class="text-center py-12"><div class="spinner mx-auto mb-4"></div><p class="text-gray-400 text-sm">正在同步至雲端...</p></div>`;
             try {
                 await window.submitData(surveyData);
-                content.innerHTML = `<div class="text-center fade-in py-8"><div class="text-5xl mb-6">🙌</div><h2 class="text-2xl font-bold text-gray-800 mb-2">提交完成！</h2><p class="text-gray-500 mb-8 text-sm">您的聲音已成功傳送到雲端。<br>願神祝福您的服事！</p><button onclick="openAdmin()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl mb-4">進入後台統計</button></div>`;
+                content.innerHTML = `<div class="text-center fade-in py-8"><div class="text-5xl mb-6">🙌</div><h2 class="text-2xl font-bold text-gray-800 mb-2">提交完成！</h2><p class="text-gray-500 mb-8 text-sm text-center px-4">您的聲音已成功傳送到雲端。<br>願神祝福您的服事！</p><button onclick="openAdmin()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl mb-4 shadow-lg active:scale-95 transition">進入後台統計</button></div>`;
                 document.getElementById('progress-bar-container').classList.add('hidden');
             } catch (e) { alert("送出失敗"); renderStep(); }
         }
 
         window.openAdmin = () => {
             const pwd = prompt("請輸入管理員密碼：");
-            if (pwd !== window.ADMIN_CODE) return alert("密碼錯誤");
+            // 確保與設定區的密碼一致
+            if (pwd !== window.ADMIN_CODE) return alert("密碼錯誤，請檢查設定區的 ADMIN_CODE。");
             
             const content = document.getElementById('content');
             content.innerHTML = `<div class="text-center py-12"><div class="spinner mx-auto mb-4"></div><p class="text-gray-400 text-sm">正在載入雲端統計...</p></div>`;
@@ -266,13 +278,14 @@
                             </div>
                             <p class="text-xs text-gray-700 font-bold mb-1">熟悉度: ${r.experience}</p>
                             <p class="text-xs text-gray-500 mb-2">感興趣: ${Array.isArray(r.interests) ? r.interests.join(', ') : r.interests}</p>
-                            <div class="bg-white p-2 rounded-lg border border-gray-50 italic text-[10px] text-gray-400">" ${r.painPoint} "</div>
+                            <div class="bg-white p-2 rounded-lg border border-gray-50 italic text-[10px] text-gray-400 leading-normal">" ${r.painPoint} "</div>
                         </div>`;
                 });
                 
-                html += `</div><button onclick="location.reload()" class="mt-8 w-full bg-gray-100 py-3 rounded-2xl text-sm font-medium text-gray-500">返回</button></div>`;
+                html += `</div><button onclick="location.reload()" class="mt-8 w-full bg-gray-100 py-3 rounded-2xl text-sm font-medium text-gray-500 hover:bg-gray-200 transition">返回首頁</button></div>`;
                 content.innerHTML = html;
                 document.getElementById('nav-buttons').classList.add('hidden');
+                if(document.getElementById('progress-bar-container')) document.getElementById('progress-bar-container').classList.add('hidden');
             });
         }
     </script>
