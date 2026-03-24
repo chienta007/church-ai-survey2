@@ -18,24 +18,21 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- Firebase 初始化 ---
+        // Firebase 初始化保護
         let firebaseConfig = {};
         try {
-            if (typeof __firebase_config !== 'undefined') {
+            if (typeof __firebase_config !== 'undefined' && __firebase_config) {
                 firebaseConfig = JSON.parse(__firebase_config);
             }
-        } catch (e) {
-            console.error("Firebase Config 載入失敗。");
-        }
+        } catch (e) { console.error("Firebase Config Error"); }
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'church-ai-app';
 
-        // --- 核心變數 ---
         let step = 0;
         let response = { age: '', exp: '', interests: [], pain: '', mode: '', time: '' };
         
@@ -48,41 +45,38 @@
             { k: 'time', t: '最方便的時段？', type: 's', opts: ['平日晚上', '週六下午', '主日午後'] }
         ];
 
-        // --- 頁面跳轉與初始化 ---
-        window.onload = () => {
+        // 立即執行 UI 初始化
+        const initUI = () => {
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.has('admin')) {
-                // 進入管理後台邏輯
                 window.handleAdminEntry();
             } else {
-                // 正常顯示問卷
                 document.getElementById('org-name-text').innerText = window.CONFIG.ORG_NAME;
-                document.getElementById('survey-card').classList.remove('hidden');
+                document.getElementById('survey-card').style.display = 'block'; // 強制顯示
             }
         };
 
-        // --- 問卷流程函數 ---
+        // 確保 DOM 讀取完畢後執行
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initUI);
+        } else {
+            initUI();
+        }
+
         window.beginSurvey = () => { step = 1; updateUI(); };
         window.goBack = () => { if(step > 1) { step--; updateUI(); } };
         window.goNext = () => {
             const q = questions[step-1];
             if((q.type==='s'&&!response[q.k]) || (q.type==='m'&&response.interests.length===0) || (q.type==='t'&&!response.pain.trim())) {
-                alert("本題尚未填寫完成喔！");
-                return;
+                alert("本題尚未填寫完成喔！"); return;
             }
             if(step < 6) { step++; updateUI(); } else { finalize(); }
         };
 
-        window.setS = (k, v) => { 
-            response[k] = v; 
-            updateUI(); 
-            if(step < 6) setTimeout(window.goNext, 300); 
-        };
-
+        window.setS = (k, v) => { response[k] = v; updateUI(); if(step < 6) setTimeout(window.goNext, 300); };
         window.toggleM = (v) => {
             const i = response.interests.indexOf(v);
-            if(i > -1) response.interests.splice(i, 1); 
-            else response.interests.push(v);
+            if(i > -1) response.interests.splice(i, 1); else response.interests.push(v);
             updateUI();
         };
 
@@ -91,12 +85,10 @@
             const main = document.getElementById('main-ui');
             const nav = document.getElementById('nav');
             const progress = document.getElementById('progress-bar-container');
-            
             progress.classList.remove('hidden');
             nav.classList.remove('hidden');
             
             let html = `<div class="fade-in"><p class="text-[10px] text-blue-500 font-bold mb-3 uppercase tracking-widest">Question ${step}/6</p><h2 class="text-xl font-bold text-gray-800 mb-8 leading-tight">${q.t}</h2>`;
-            
             if(q.type === 's') {
                 html += `<div class="grid gap-3">`;
                 q.opts.forEach(o => html += `<button onclick="setS('${q.k}','${o}')" class="btn-opt w-full text-left p-4 rounded-2xl bg-gray-50 text-sm font-medium ${response[q.k]===o?'btn-sel':''}">${o}</button>`);
@@ -105,13 +97,12 @@
                 html += `<div class="grid gap-3">`;
                 q.opts.forEach(o => {
                     const active = response.interests.includes(o);
-                    html += `<button onclick="toggleM('${o}')" class="btn-opt w-full text-left p-4 rounded-2xl bg-gray-50 text-sm font-medium ${active?'btn-sel':''}"><div class="flex justify-between items-center"><span>${o}</span><span>${active?'✓':''}</span></div></button>`;
+                    html += `<button onclick="toggleM('${o}')" class="btn-opt w-full text-left p-4 rounded-2xl bg-gray-50 text-sm font-medium ${active?'btn-sel':''}"><div class="flex justify-between"><span>${o}</span><span>${active?'✓':''}</span></div></button>`;
                 });
                 html += `</div>`;
             } else {
                 html += `<textarea id="txt" oninput="window.updatePain(this.value)" class="w-full p-5 bg-gray-50 border-0 rounded-2xl h-44 text-sm focus:ring-2 focus:ring-blue-100 outline-none resize-none" placeholder="${q.holder}">${response.pain}</textarea>`;
             }
-            
             main.innerHTML = html + `</div>`;
             document.getElementById('btn-back').style.visibility = step === 1 ? 'hidden' : 'visible';
             document.getElementById('btn-next').innerText = step === 6 ? '完成送出' : '下一步';
@@ -125,24 +116,16 @@
             const main = document.getElementById('main-ui');
             document.getElementById('nav').classList.add('hidden');
             document.getElementById('progress-bar-container').classList.add('hidden');
-            main.innerHTML = `<div class="text-center py-20"><div class="loading-spin mx-auto mb-6"></div><p class="text-gray-400 text-sm font-bold tracking-widest">正在安全儲存中...</p></div>`;
+            main.innerHTML = `<div class="text-center py-20"><div class="loading-spin mx-auto mb-6"></div><p class="text-gray-400 text-sm font-bold tracking-widest">正在同步資料...</p></div>`;
             try {
                 const uid = auth.currentUser.uid;
                 const docRef = doc(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID, uid);
-                await setDoc(docRef, {
-                    ...response,
-                    org: window.CONFIG.ORG_NAME,
-                    timestamp: new Date().toISOString()
-                });
+                await setDoc(docRef, { ...response, org: window.CONFIG.ORG_NAME, timestamp: new Date().toISOString() });
                 localStorage.setItem('done_' + window.CONFIG.SURVEY_ID, 'true');
-                main.innerHTML = `<div class="text-center fade-in py-10"><div class="text-6xl mb-8">🙌</div><h2 class="text-2xl font-black text-gray-800 mb-3">哈利路亞！</h2><p class="text-gray-500 mb-4 leading-relaxed px-4">您的意見已成功存入雲端，感謝您的協助。</p></div>`;
-            } catch(e) { 
-                alert("提交失敗，請檢查網路。"); 
-                step = 6; updateUI();
-            }
+                main.innerHTML = `<div class="text-center fade-in py-10"><div class="text-6xl mb-8">🙌</div><h2 class="text-2xl font-black text-gray-800 mb-3">哈利路亞！</h2><p class="text-gray-500 mb-4 leading-relaxed px-4">您的意見已存入雲端，感謝您的協助。</p></div>`;
+            } catch(e) { alert("連線不穩定，請重試"); step = 6; updateUI(); }
         }
 
-        // --- 認證監聽 ---
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 const docRef = doc(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID, user.uid);
@@ -151,11 +134,8 @@
                     window.showCompletedScreen();
                 }
             } else {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) await signInWithCustomToken(auth, __initial_auth_token);
+                else await signInAnonymously(auth);
             }
         });
 
@@ -165,72 +145,51 @@
             document.getElementById('nav').classList.add('hidden');
         };
 
-        // --- 全自動管理員入口邏輯 ---
         window.handleAdminEntry = () => {
-            const p = prompt("請輸入管理員密碼：");
-            if(p !== window.CONFIG.ADMIN_PWD) {
-                alert("密碼不正確");
-                window.location.href = window.location.pathname;
-                return;
-            }
+            const p = prompt("管理員密碼：");
+            if(p !== window.CONFIG.ADMIN_PWD) { alert("密碼錯誤"); location.href = location.pathname; return; }
             
-            // 顯示主容器並進入讀取狀態
-            const card = document.getElementById('survey-card');
-            card.classList.remove('hidden');
+            document.getElementById('survey-card').style.display = 'block';
             const main = document.getElementById('main-ui');
-            main.innerHTML = `<div class="text-center py-20"><div class="loading-spin mx-auto mb-6"></div><p class="text-gray-400 text-sm font-bold">正在讀取雲端自動報表...</p></div>`;
+            main.innerHTML = `<div class="text-center py-20"><div class="loading-spin mx-auto mb-6"></div><p class="text-gray-400 text-sm font-bold">雲端同步中...</p></div>`;
             
-            // 直接訂閱資料庫資料，不需任何手動貼上動作
             const colRef = collection(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID);
             onSnapshot(colRef, (snap) => {
                 const list = snap.docs.map(d => d.data());
+                list.sort((a,b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
                 let html = `<div class="fade-in text-left">
                     <div class="flex justify-between items-end mb-8">
-                        <div><h2 class="text-2xl font-black text-gray-800">雲端統計成果</h2><p class="text-xs text-blue-500 font-bold mt-1 uppercase">自動同步中：共有 ${list.length} 位回覆</p></div>
-                        <button onclick="window.downloadCSV()" class="text-[10px] bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg shadow-sm">匯出 Excel</button>
+                        <div><h2 class="text-2xl font-black text-gray-800">調查統計成果</h2><p class="text-xs text-blue-500 font-bold mt-1 uppercase">共有 ${list.length} 位回覆</p></div>
+                        <button onclick="window.downloadCSV()" class="text-[10px] bg-green-500 text-white px-3 py-1.5 rounded-lg shadow-sm">匯出 Excel</button>
                     </div>
                     <div class="space-y-4 max-h-[480px] overflow-auto pr-2 custom-scroll">`;
                 
-                list.sort((a,b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
-                
-                if (list.length === 0) {
-                    html += `<p class="text-center py-20 text-gray-300">目前尚無數據...</p>`;
-                } else {
+                if (list.length === 0) html += `<p class="text-center py-20 text-gray-300">目前尚無數據...</p>`;
+                else {
                     list.forEach(r => {
                         html += `<div class="p-6 bg-gray-50 rounded-[1.5rem] border border-gray-100 shadow-sm mb-4">
-                            <div class="flex justify-between items-center mb-3 text-xs font-black">
-                                <span class="text-blue-600 bg-white px-3 py-1.5 rounded-xl border border-blue-50 shadow-sm">${r.age || '未知'}</span>
-                                <span class="text-gray-300 font-normal scale-90">${r.timestamp ? new Date(r.timestamp).toLocaleDateString() : ''}</span>
-                            </div>
-                            <p class="text-sm font-bold text-gray-700 mb-1 leading-tight">${r.exp || '無資料'}</p>
+                            <div class="flex justify-between items-center mb-3 text-xs font-black"><span class="text-blue-600 bg-white px-3 py-1.5 rounded-xl border border-blue-50 shadow-sm">${r.age || '未知'}</span><span class="text-gray-300 font-normal scale-90">${r.timestamp ? new Date(r.timestamp).toLocaleDateString() : ''}</span></div>
+                            <p class="text-sm font-bold text-gray-700 mb-1 leading-tight">${r.exp || ''}</p>
                             <p class="text-[10px] text-gray-400 mb-4">${Array.isArray(r.interests)?r.interests.join(' / '): (r.interests || '')}</p>
                             <div class="bg-white p-4 rounded-2xl text-[11px] text-gray-500 italic leading-relaxed border border-gray-50">"${r.pain || '未填寫'}"</div>
                         </div>`;
                     });
                 }
-                
-                main.innerHTML = html + `</div><button onclick="window.location.href=window.location.pathname" class="mt-8 w-full bg-gray-100 py-5 rounded-2xl text-xs font-bold text-gray-400 hover:bg-gray-200 transition">登出並返回</button></div>`;
+                main.innerHTML = html + `</div><button onclick="location.href=location.pathname" class="mt-8 w-full bg-gray-100 py-5 rounded-2xl text-xs font-bold text-gray-400">登出</button></div>`;
                 window.currentData = list;
-            }, (error) => {
-                alert("讀取雲端資料失敗，請確認資料庫權限。");
-                window.location.href = window.location.pathname;
             });
         };
 
         window.downloadCSV = () => {
             const list = window.currentData;
-            if(!list || list.length === 0) return alert("尚無數據可匯出");
-            let csv = "\ufeff時間,年齡,經驗,感興趣技能,上課方式,時段,痛點\n";
-            list.forEach(r => {
-                csv += `${r.timestamp || ''},${r.age || ''},${r.exp || ''},"${Array.isArray(r.interests)?r.interests.join(';'):r.interests || ''}",${r.mode || ''},${r.time || ''},"${(r.pain || '').replace(/"/g, '""')}"\n`;
-            });
+            if(!list || list.length === 0) return alert("尚無數據");
+            let csv = "\ufeff時間,年齡,經驗,技能,方式,時段,痛點\n";
+            list.forEach(r => { csv += `${r.timestamp || ''},${r.age || ''},${r.exp || ''},"${Array.isArray(r.interests)?r.interests.join(';'):r.interests || ''}",${r.mode || ''},${r.time || ''},"${(r.pain || '').replace(/"/g, '""')}"\n`; });
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
             link.href = URL.createObjectURL(blob);
-            link.setAttribute("download", `AI調查統計_${new Date().toLocaleDateString()}.csv`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            link.setAttribute("download", "AI調查結果.csv");
+            document.body.appendChild(link); link.click(); document.body.removeChild(link);
         };
     </script>
 
@@ -248,18 +207,13 @@
     </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
-
-    <!-- 初始隱藏，確保頁面邏輯判斷後再顯示 -->
-    <div id="survey-card" class="hidden bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full p-10 fade-in border border-white">
-        
-        <!-- Header -->
+    <div id="survey-card" style="display:none;" class="bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full p-10 fade-in border border-white">
         <div id="header" class="text-center mb-12">
             <div class="inline-block p-6 bg-blue-50 rounded-[2rem] mb-6 text-4xl shadow-inner">⛪</div>
             <h1 class="text-xl font-bold text-gray-800 tracking-tight">數位時代新服事</h1>
             <h2 class="text-3xl font-black text-blue-600 mb-4">AI 系列課程需求調查</h2>
             <div id="org-banner" class="text-sm text-gray-400">本問卷由 <span id="org-name-text" class="font-bold text-gray-700"></span> 發起</div>
         </div>
-
         <div id="progress-bar-container" class="hidden mb-8">
             <div class="flex justify-between text-[10px] text-gray-400 mb-2 uppercase tracking-widest font-bold">
                 <span id="progress-text">STEP 0/6</span>
@@ -269,23 +223,18 @@
                 <div id="progress-bar" class="bg-blue-600 h-full transition-all duration-500" style="width: 0%"></div>
             </div>
         </div>
-
-        <!-- Main UI -->
         <div id="main-ui">
             <div class="text-center">
-                <p class="text-gray-500 mb-12 text-sm leading-relaxed px-2">主內平安！邀請您花 30 秒分享您的想法，幫助我們規劃更優質的 AI 學習課程。您的意見對我們非常重要。</p>
+                <p class="text-gray-500 mb-12 text-sm leading-relaxed px-2">主內平安！邀請您花 30 秒分享您的想法，這對我們的開課規劃非常重要。</p>
                 <button onclick="beginSurvey()" class="w-full bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold py-5 rounded-2xl shadow-xl shadow-blue-100 transition duration-200">
                     立即開始填寫
                 </button>
             </div>
         </div>
-
-        <!-- Navigation -->
         <div id="nav" class="hidden mt-8 flex gap-3">
             <button id="btn-back" onclick="goBack()" class="flex-1 bg-gray-50 text-gray-400 font-bold py-4 rounded-2xl active:scale-95 transition">上一步</button>
             <button id="btn-next" onclick="goNext()" class="flex-[2] bg-blue-600 text-white font-bold py-4 rounded-2xl shadow-lg active:scale-95 transition">下一步</button>
         </div>
     </div>
-
 </body>
 </html>
