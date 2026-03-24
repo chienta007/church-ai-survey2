@@ -6,83 +6,84 @@
     <title>數位時代新服事：教會 AI 系列課程需求調查</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
         // ==========================================
-        // --- 1. 管理員基本設定區 (每個教會請改這三項) ---
+        // --- 1. 管理員基本設定區 ---
         // ==========================================
-        const ORG_NAME = "我的教會";      // 顯示在網頁上的名稱
-        const ADMIN_CODE = "2026-001";       // 管理員查看數據的密碼
+        const ORG_NAME = "我的教會-002";      // 顯示在網頁上的名稱
+        const ADMIN_CODE = "2026";       // 管理員查看數據的密碼
         const SURVEY_ID = "church-001";  // 數據識別碼
         // ==========================================
 
-        window.ORG_NAME = ORG_NAME;
-        window.ADMIN_CODE = ADMIN_CODE;
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'church-ai-app';
+
+        window.db = db;
+        window.auth = auth;
+        window.appId = appId;
         window.SURVEY_ID = SURVEY_ID;
-        window.currentUser = null;
+        window.ADMIN_CODE = ADMIN_CODE;
+        window.ORG_NAME = ORG_NAME;
 
-        async function initSystem() {
-            try {
-                const hasConfig = typeof __firebase_config !== 'undefined' && __firebase_config !== null;
-                if (hasConfig) {
-                    const { initializeApp } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js");
-                    const { getAuth, signInAnonymously, onAuthStateChanged } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js");
-                    const { getFirestore } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
-                    
-                    const firebaseConfig = JSON.parse(__firebase_config);
-                    const app = initializeApp(firebaseConfig);
-                    const auth = getAuth(app);
-                    window.db = getFirestore(app);
-                    
-                    onAuthStateChanged(auth, (user) => {
-                        if (user) {
-                            window.currentUser = user;
-                            checkSubmissionStatus(user.uid);
-                        }
-                    });
-                    await signInAnonymously(auth);
-                } else {
-                    setupLocalUser();
-                }
-            } catch (e) {
-                setupLocalUser();
+        const initAuth = async () => {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                await signInWithCustomToken(auth, __initial_auth_token);
+            } else {
+                await signInAnonymously(auth);
             }
-        }
+        };
+        initAuth();
 
-        function setupLocalUser() {
-            let localId = localStorage.getItem('survey_uid_' + window.SURVEY_ID);
-            if (!localId) {
-                localId = 'USER-' + Math.random().toString(36).substr(2, 9);
-                localStorage.setItem('survey_uid_' + window.SURVEY_ID, localId);
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                window.currentUser = user;
+                checkSubmissionStatus(user.uid);
             }
-            window.currentUser = { uid: localId, isLocal: true };
-            checkSubmissionStatus(localId);
-        }
+        });
 
         async function checkSubmissionStatus(uid) {
-            const alreadyDone = localStorage.getItem('submitted_' + window.SURVEY_ID);
-            if (alreadyDone === 'true') {
+            // 同時檢查本地標記與雲端資料
+            const localSubmitted = localStorage.getItem('submitted_' + SURVEY_ID);
+            const docRef = doc(db, 'artifacts', appId, 'public', 'data', SURVEY_ID, uid);
+            const docSnap = await getDoc(docRef);
+            
+            if (localSubmitted === 'true' || docSnap.exists()) {
                 window.showAlreadySubmitted();
             }
         }
 
         window.submitData = async (data) => {
+            if (!window.currentUser) return;
             const uid = window.currentUser.uid;
-            localStorage.setItem('submitted_' + window.SURVEY_ID, 'true');
-            if (window.db && !window.currentUser.isLocal) {
-                const { doc, setDoc } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
-                const appId = typeof __app_id !== 'undefined' ? __app_id : 'church-ai-app';
-                const docRef = doc(window.db, 'artifacts', appId, 'public', 'data', window.SURVEY_ID, uid);
-                await setDoc(docRef, { ...data, organization: window.ORG_NAME, timestamp: new Date().toISOString() });
-            }
+            const docRef = doc(db, 'artifacts', appId, 'public', 'data', SURVEY_ID, uid);
+            await setDoc(docRef, { 
+                ...data, 
+                organization: ORG_NAME, 
+                timestamp: new Date().toISOString() 
+            });
+            localStorage.setItem('submitted_' + SURVEY_ID, 'true');
         };
 
-        initSystem();
+        window.listenToData = (callback) => {
+            const colRef = collection(db, 'artifacts', appId, 'public', 'data', SURVEY_ID);
+            return onSnapshot(colRef, (snapshot) => {
+                const data = snapshot.docs.map(doc => doc.data());
+                callback(data);
+            }, (error) => console.error("監聽失敗:", error));
+        };
     </script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
-        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f0f2f5; -webkit-tap-highlight-color: transparent; }
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f8fafc; -webkit-tap-highlight-color: transparent; }
         .fade-in { animation: fadeIn 0.4s ease-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-        .btn-option { transition: all 0.2s; border: 1px solid #e5e7eb; cursor: pointer; user-select: none; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .btn-option { transition: all 0.2s; border: 1px solid #e2e8f0; cursor: pointer; user-select: none; }
         .btn-selected { background-color: #2563eb !important; color: white !important; border-color: #1d4ed8; }
         .spinner { border: 3px solid rgba(0,0,0,0.1); border-left-color: #2563eb; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -90,7 +91,7 @@
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
 
-    <div id="survey-container" class="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-8 fade-in overflow-hidden">
+    <div id="survey-container" class="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-8 fade-in overflow-hidden relative">
         <div id="progress-bar-container" class="hidden mb-6">
             <div class="flex justify-between text-[10px] text-gray-400 mb-1 uppercase tracking-widest font-bold">
                 <span id="progress-text">STEP 0/6</span>
@@ -108,8 +109,8 @@
                 <h2 class="text-2xl font-black text-blue-600 mb-4">AI 系列課程需求調查</h2>
                 <p class="text-gray-500 mb-8 text-sm leading-relaxed">平安！本問卷由 <span class="font-bold text-gray-700" id="display-org">載入中...</span> 發起。</p>
                 
-                <div class="space-y-3 mb-8 text-left">
-                    <div class="flex items-center gap-3 p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                <div class="space-y-3 mb-8">
+                    <div class="flex items-center gap-3 p-4 bg-gray-50 rounded-2xl border border-gray-100 text-left">
                         <span class="text-blue-500">🕒</span>
                         <p class="text-xs text-gray-600">每堂課程長度預計為 <strong>2 小時</strong></p>
                     </div>
@@ -119,13 +120,15 @@
                     開始填寫 (約 30 秒)
                 </button>
 
-                <button onclick="openAdmin()" class="mt-12 text-[10px] text-gray-300 hover:text-gray-500 underline uppercase tracking-widest">Admin Dashboard</button>
+                <div class="mt-12 flex justify-center gap-4">
+                    <button onclick="openAdmin()" class="text-[10px] text-gray-300 hover:text-gray-500 underline uppercase tracking-widest">後台統計</button>
+                </div>
             </div>
         </div>
 
         <div id="nav-buttons" class="hidden mt-8 flex justify-between gap-3">
-            <button id="prev-btn" onclick="prevStep()" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-500 font-medium py-3 rounded-xl">上一步</button>
-            <button id="next-btn" onclick="nextStep()" class="flex-[2] bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl shadow-md">下一步</button>
+            <button id="prev-btn" onclick="prevStep()" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-500 font-medium py-3 rounded-xl transition">上一步</button>
+            <button id="next-btn" onclick="nextStep()" class="flex-[2] bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl shadow-md transition">下一步</button>
         </div>
     </div>
 
@@ -149,8 +152,25 @@
 
         window.showAlreadySubmitted = () => {
             const content = document.getElementById('content');
-            content.innerHTML = `<div class="text-center fade-in py-8"><div class="text-5xl mb-6">✅</div><h2 class="text-xl font-bold text-gray-800 mb-2">您已完成填寫</h2><p class="text-sm text-gray-400">願神祝福您的服事！</p><button onclick="location.reload()" class="mt-8 text-xs text-blue-500 underline">返回首頁</button></div>`;
+            content.innerHTML = `
+                <div class="text-center fade-in py-8">
+                    <div class="text-5xl mb-6">✅</div>
+                    <h2 class="text-xl font-bold text-gray-800 mb-2">您已完成填寫</h2>
+                    <p class="text-sm text-gray-400 mb-10">您的意見已存入雲端，謝謝！</p>
+                    
+                    <div class="space-y-4">
+                        <button onclick="openAdmin()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl shadow-lg">進入後台統計</button>
+                        <button onclick="resetMyRecord()" class="text-[10px] text-gray-300 hover:text-blue-500 underline uppercase tracking-widest">清除本機紀錄 (測試用)</button>
+                    </div>
+                </div>`;
             document.getElementById('nav-buttons').classList.add('hidden');
+        };
+
+        window.resetMyRecord = () => {
+            if(confirm("確定要清除本機填寫紀錄並重新測試嗎？\n(這不會刪除已上傳到雲端的數據)")) {
+                localStorage.removeItem('submitted_' + window.SURVEY_ID);
+                location.reload();
+            }
         };
 
         function startSurvey() {
@@ -211,73 +231,50 @@
         async function submitFinal() {
             const content = document.getElementById('content');
             document.getElementById('nav-buttons').classList.add('hidden');
-            content.innerHTML = `<div class="text-center py-12"><div class="spinner mx-auto mb-4"></div><p class="text-gray-400 text-sm">正在儲存...</p></div>`;
+            content.innerHTML = `<div class="text-center py-12"><div class="spinner mx-auto mb-4"></div><p class="text-gray-400 text-sm">正在同步至雲端...</p></div>`;
             try {
                 await window.submitData(surveyData);
-                const csvRow = `${window.SURVEY_ID},${surveyData.age},${surveyData.experience},"${surveyData.interests.join(';')}",${surveyData.mode},"${surveyData.painPoint.replace(/\n/g, ' ')}"`;
-                content.innerHTML = `
-                    <div class="text-center fade-in">
-                        <div class="text-5xl mb-6">🙌</div>
-                        <h2 class="text-xl font-bold text-gray-800 mb-2">提交完成！</h2>
-                        <p class="text-gray-500 mb-6 text-xs text-center">請複製下方代碼回傳給同工完成登記：</p>
-                        <div class="bg-blue-50 p-4 rounded-2xl border border-blue-100 mb-6 overflow-hidden text-left">
-                            <code class="text-[9px] break-all text-blue-600 font-mono select-all">${csvRow}</code>
-                        </div>
-                        <button onclick="location.reload()" class="text-xs text-gray-400 underline">返回首頁</button>
-                    </div>`;
+                content.innerHTML = `<div class="text-center fade-in py-8"><div class="text-5xl mb-6">🙌</div><h2 class="text-2xl font-bold text-gray-800 mb-2">提交完成！</h2><p class="text-gray-500 mb-8 text-sm">您的聲音已成功傳送到雲端。<br>願神祝福您的服事！</p><button onclick="openAdmin()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl mb-4">進入後台統計</button></div>`;
                 document.getElementById('progress-bar-container').classList.add('hidden');
-            } catch (e) { alert("失敗"); renderStep(); }
+            } catch (e) { alert("送出失敗"); renderStep(); }
         }
 
-        function openAdmin() {
+        window.openAdmin = () => {
             const pwd = prompt("請輸入管理員密碼：");
             if (pwd !== window.ADMIN_CODE) return alert("密碼錯誤");
+            
             const content = document.getElementById('content');
-            content.innerHTML = `
-                <div class="fade-in">
-                    <h2 class="text-lg font-bold mb-4">管理員數據整理工具</h2>
-                    <textarea id="raw-data" class="w-full h-40 p-3 text-[10px] bg-gray-50 border rounded-xl mb-4" placeholder="貼入大家傳給您的代碼..."></textarea>
-                    <div class="flex gap-2">
-                        <button onclick="processData()" class="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold text-sm">整理成表格</button>
-                        <button onclick="location.reload()" class="bg-gray-100 px-4 rounded-xl text-sm">返回</button>
-                    </div>
-                    <div id="result-table" class="mt-6 overflow-auto max-h-60 text-[9px]"></div>
-                </div>
-            `;
-            document.getElementById('nav-buttons').classList.add('hidden');
-        }
-
-        window.processData = () => {
-            const raw = document.getElementById('raw-data').value;
-            const lines = raw.split('\n').filter(l => l.trim() !== '');
-            if (lines.length === 0) return alert("請貼入資料");
-
-            let html = `<table class="w-full border-collapse border border-gray-200">
-                <tr class="bg-gray-100"><th class="border p-1">年齡</th><th class="border p-1">經驗</th><th class="border p-1">痛點</th></tr>`;
-            let csvContent = "\ufeff年齡,經驗,興趣,方式,痛點\n";
-
-            lines.forEach(l => {
-                const parts = l.split(',');
-                if (parts.length >= 6) {
-                    html += `<tr><td class="border p-1">${parts[1]}</td><td class="border p-1">${parts[2]}</td><td class="border p-1">${parts[5]}</td></tr>`;
-                    csvContent += `${parts[1]},${parts[2]},${parts[3]},${parts[4]},${parts[5]}\n`;
-                }
+            content.innerHTML = `<div class="text-center py-12"><div class="spinner mx-auto mb-4"></div><p class="text-gray-400 text-sm">正在載入雲端統計...</p></div>`;
+            
+            window.listenToData((rows) => {
+                let html = `
+                    <div class="fade-in">
+                        <div class="flex justify-between items-center mb-6">
+                            <h2 class="text-xl font-bold text-gray-800">雲端統計報告</h2>
+                            <span class="bg-blue-100 text-blue-600 text-[10px] px-2 py-1 rounded-full font-bold">${rows.length} 份回覆</span>
+                        </div>
+                        <div class="space-y-3 max-h-96 overflow-auto pr-1">`;
+                
+                rows.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                
+                rows.forEach(r => {
+                    html += `
+                        <div class="p-4 bg-gray-50 rounded-2xl border border-gray-100 text-left">
+                            <div class="flex justify-between items-start mb-2">
+                                <span class="text-[10px] font-bold text-blue-500 bg-white px-2 py-0.5 rounded border border-blue-100">${r.age}</span>
+                                <span class="text-[9px] text-gray-300">${new Date(r.timestamp).toLocaleDateString()}</span>
+                            </div>
+                            <p class="text-xs text-gray-700 font-bold mb-1">熟悉度: ${r.experience}</p>
+                            <p class="text-xs text-gray-500 mb-2">感興趣: ${Array.isArray(r.interests) ? r.interests.join(', ') : r.interests}</p>
+                            <div class="bg-white p-2 rounded-lg border border-gray-50 italic text-[10px] text-gray-400">" ${r.painPoint} "</div>
+                        </div>`;
+                });
+                
+                html += `</div><button onclick="location.reload()" class="mt-8 w-full bg-gray-100 py-3 rounded-2xl text-sm font-medium text-gray-500">返回</button></div>`;
+                content.innerHTML = html;
+                document.getElementById('nav-buttons').classList.add('hidden');
             });
-            html += `</table>`;
-            html += `<button onclick="downloadCSV('${btoa(unescape(encodeURIComponent(csvContent)))}')" class="w-full bg-green-600 text-white py-2 rounded-xl mt-4 font-bold text-xs">下載 Excel 報表</button>`;
-            document.getElementById('result-table').innerHTML = html;
-        };
-
-        window.downloadCSV = (base64) => {
-            const link = document.createElement("a");
-            link.href = "data:text/csv;charset=utf-8," + encodeURIComponent(decodeURIComponent(escape(atob(base64))));
-            link.setAttribute("download", "AI_調查結果.csv");
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        };
-        
-        window.openAdmin = openAdmin;
+        }
     </script>
 </body>
 </html>
