@@ -18,7 +18,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- Firebase 初始化 ---
         let firebaseConfig = {};
@@ -48,14 +48,14 @@
             { k: 'time', t: '最方便的時段？', type: 's', opts: ['平日晚上', '週六下午', '主日午後'] }
         ];
 
-        // --- 頁面跳轉邏輯 ---
+        // --- 頁面跳轉與初始化 ---
         window.onload = () => {
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.has('admin')) {
-                // 如果網址帶有 ?admin 參數，則進入後台邏輯
+                // 進入管理後台邏輯
                 window.handleAdminEntry();
             } else {
-                // 否則正常顯示問卷
+                // 正常顯示問卷
                 document.getElementById('org-name-text').innerText = window.CONFIG.ORG_NAME;
                 document.getElementById('survey-card').classList.remove('hidden');
             }
@@ -125,7 +125,7 @@
             const main = document.getElementById('main-ui');
             document.getElementById('nav').classList.add('hidden');
             document.getElementById('progress-bar-container').classList.add('hidden');
-            main.innerHTML = `<div class="text-center py-20"><div class="loading-spin mx-auto mb-6"></div><p class="text-gray-400 text-sm font-bold tracking-widest">正在存入雲端...</p></div>`;
+            main.innerHTML = `<div class="text-center py-20"><div class="loading-spin mx-auto mb-6"></div><p class="text-gray-400 text-sm font-bold tracking-widest">正在安全儲存中...</p></div>`;
             try {
                 const uid = auth.currentUser.uid;
                 const docRef = doc(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID, uid);
@@ -142,7 +142,7 @@
             }
         }
 
-        // --- 認證 ---
+        // --- 認證監聽 ---
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 const docRef = doc(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID, user.uid);
@@ -165,54 +165,69 @@
             document.getElementById('nav').classList.add('hidden');
         };
 
-        // --- 管理員專屬入口邏輯 ---
+        // --- 全自動管理員入口邏輯 ---
         window.handleAdminEntry = () => {
             const p = prompt("請輸入管理員密碼：");
             if(p !== window.CONFIG.ADMIN_PWD) {
                 alert("密碼不正確");
-                window.location.href = window.location.pathname; // 跳回一般頁面
+                window.location.href = window.location.pathname;
                 return;
             }
             
+            // 顯示主容器並進入讀取狀態
+            const card = document.getElementById('survey-card');
+            card.classList.remove('hidden');
             const main = document.getElementById('main-ui');
-            document.getElementById('survey-card').classList.remove('hidden');
-            main.innerHTML = `<div class="text-center py-20"><div class="loading-spin mx-auto mb-6"></div><p class="text-gray-400 text-sm font-bold">正在讀取雲端報表...</p></div>`;
+            main.innerHTML = `<div class="text-center py-20"><div class="loading-spin mx-auto mb-6"></div><p class="text-gray-400 text-sm font-bold">正在讀取雲端自動報表...</p></div>`;
             
+            // 直接訂閱資料庫資料，不需任何手動貼上動作
             const colRef = collection(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID);
             onSnapshot(colRef, (snap) => {
                 const list = snap.docs.map(d => d.data());
                 let html = `<div class="fade-in text-left">
                     <div class="flex justify-between items-end mb-8">
-                        <div><h2 class="text-2xl font-black text-gray-800">數據統計成果</h2><p class="text-xs text-blue-500 font-bold mt-1 uppercase">共有 ${list.length} 位回覆</p></div>
-                        <button onclick="window.downloadCSV()" class="text-[10px] bg-green-500 text-white px-3 py-1 rounded-lg">下載 Excel</button>
+                        <div><h2 class="text-2xl font-black text-gray-800">雲端統計成果</h2><p class="text-xs text-blue-500 font-bold mt-1 uppercase">自動同步中：共有 ${list.length} 位回覆</p></div>
+                        <button onclick="window.downloadCSV()" class="text-[10px] bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg shadow-sm">匯出 Excel</button>
                     </div>
                     <div class="space-y-4 max-h-[480px] overflow-auto pr-2 custom-scroll">`;
                 
                 list.sort((a,b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
-                list.forEach(r => {
-                    html += `<div class="p-6 bg-gray-50 rounded-[1.5rem] border border-gray-100 shadow-sm mb-4">
-                        <div class="flex justify-between items-center mb-3 text-xs font-black"><span class="text-blue-600 bg-white px-3 py-1.5 rounded-xl border border-blue-50 shadow-sm">${r.age || '未知'}</span><span class="text-gray-300 font-normal">${r.timestamp ? new Date(r.timestamp).toLocaleDateString() : ''}</span></div>
-                        <p class="text-sm font-bold text-gray-700 mb-1 leading-tight">${r.exp || ''}</p>
-                        <p class="text-[10px] text-gray-400 mb-4">${Array.isArray(r.interests)?r.interests.join(' / '): (r.interests || '')}</p>
-                        <div class="bg-white p-4 rounded-2xl text-[11px] text-gray-500 italic leading-relaxed border border-gray-50">"${r.pain || '未填寫'}"</div>
-                    </div>`;
-                });
-                main.innerHTML = html + `</div><button onclick="window.location.href=window.location.pathname" class="mt-8 w-full bg-gray-100 py-5 rounded-2xl text-xs font-bold text-gray-400">登出並返回</button></div>`;
+                
+                if (list.length === 0) {
+                    html += `<p class="text-center py-20 text-gray-300">目前尚無數據...</p>`;
+                } else {
+                    list.forEach(r => {
+                        html += `<div class="p-6 bg-gray-50 rounded-[1.5rem] border border-gray-100 shadow-sm mb-4">
+                            <div class="flex justify-between items-center mb-3 text-xs font-black">
+                                <span class="text-blue-600 bg-white px-3 py-1.5 rounded-xl border border-blue-50 shadow-sm">${r.age || '未知'}</span>
+                                <span class="text-gray-300 font-normal scale-90">${r.timestamp ? new Date(r.timestamp).toLocaleDateString() : ''}</span>
+                            </div>
+                            <p class="text-sm font-bold text-gray-700 mb-1 leading-tight">${r.exp || '無資料'}</p>
+                            <p class="text-[10px] text-gray-400 mb-4">${Array.isArray(r.interests)?r.interests.join(' / '): (r.interests || '')}</p>
+                            <div class="bg-white p-4 rounded-2xl text-[11px] text-gray-500 italic leading-relaxed border border-gray-50">"${r.pain || '未填寫'}"</div>
+                        </div>`;
+                    });
+                }
+                
+                main.innerHTML = html + `</div><button onclick="window.location.href=window.location.pathname" class="mt-8 w-full bg-gray-100 py-5 rounded-2xl text-xs font-bold text-gray-400 hover:bg-gray-200 transition">登出並返回</button></div>`;
                 window.currentData = list;
+            }, (error) => {
+                alert("讀取雲端資料失敗，請確認資料庫權限。");
+                window.location.href = window.location.pathname;
             });
         };
 
         window.downloadCSV = () => {
             const list = window.currentData;
-            if(!list) return;
-            let csv = "\ufeff時間,年齡,經驗,感興趣技能,痛點\n";
+            if(!list || list.length === 0) return alert("尚無數據可匯出");
+            let csv = "\ufeff時間,年齡,經驗,感興趣技能,上課方式,時段,痛點\n";
             list.forEach(r => {
-                csv += `${r.timestamp},${r.age},${r.exp},"${Array.isArray(r.interests)?r.interests.join(';'):r.interests}","${r.pain}"\n`;
+                csv += `${r.timestamp || ''},${r.age || ''},${r.exp || ''},"${Array.isArray(r.interests)?r.interests.join(';'):r.interests || ''}",${r.mode || ''},${r.time || ''},"${(r.pain || '').replace(/"/g, '""')}"\n`;
             });
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
             link.href = URL.createObjectURL(blob);
-            link.setAttribute("download", "AI調查結果.csv");
+            link.setAttribute("download", `AI調查統計_${new Date().toLocaleDateString()}.csv`);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
