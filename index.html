@@ -5,262 +5,272 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>數位時代新服事：教會 AI 系列課程需求調查</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script>
+        // --- 1. 管理員基本設定 ---
+        window.CONFIG = {
+            ORG_NAME: "我的教會",      // <--- 您的教會名稱
+            ADMIN_PWD: "2024",        // <--- 您的後台管理密碼
+            SURVEY_ID: "church_ai_v1" // <--- 數據識別碼
+        };
+    </script>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Firebase 初始化 ---
+        let firebaseConfig = {};
+        try {
+            if (typeof __firebase_config !== 'undefined') {
+                firebaseConfig = JSON.parse(__firebase_config);
+            }
+        } catch (e) {
+            console.error("Firebase Config 載入失敗。");
+        }
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'church-ai-app';
+
+        // --- 核心變數 ---
+        let step = 0;
+        let response = { age: '', exp: '', interests: [], pain: '', mode: '', time: '' };
+        
+        const questions = [
+            { k: 'age', t: '您的年齡層？', type: 's', opts: ['青年 (12-18歲)', '社青 (19-35歲)', '壯年 (36-55歲)', '樂齡 (56歲以上)'] },
+            { k: 'exp', t: '對 AI 熟悉嗎？', type: 's', opts: ['小白 (沒用過)', '初級 (聽過/偶爾用)', '中級 (常用)', '進階 (專家)'] },
+            { k: 'interests', t: '想學哪些技能？', type: 'm', opts: ['生活幫手', '服事同工', '視覺創意', '學生學習', '進階技能'] },
+            { k: 'pain', t: '最想解決什麼難點？', type: 't', holder: '例如：週報製作太慢、想做精美海報...' },
+            { k: 'mode', t: '偏好上課方式？', type: 's', opts: ['實體課程', '線上課程', '雙軌並行'] },
+            { k: 'time', t: '最方便的時段？', type: 's', opts: ['平日晚上', '週六下午', '主日午後'] }
+        ];
+
+        // --- 頁面跳轉邏輯 ---
+        window.onload = () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('admin')) {
+                // 如果網址帶有 ?admin 參數，則進入後台邏輯
+                window.handleAdminEntry();
+            } else {
+                // 否則正常顯示問卷
+                document.getElementById('org-name-text').innerText = window.CONFIG.ORG_NAME;
+                document.getElementById('survey-card').classList.remove('hidden');
+            }
+        };
+
+        // --- 問卷流程函數 ---
+        window.beginSurvey = () => { step = 1; updateUI(); };
+        window.goBack = () => { if(step > 1) { step--; updateUI(); } };
+        window.goNext = () => {
+            const q = questions[step-1];
+            if((q.type==='s'&&!response[q.k]) || (q.type==='m'&&response.interests.length===0) || (q.type==='t'&&!response.pain.trim())) {
+                alert("本題尚未填寫完成喔！");
+                return;
+            }
+            if(step < 6) { step++; updateUI(); } else { finalize(); }
+        };
+
+        window.setS = (k, v) => { 
+            response[k] = v; 
+            updateUI(); 
+            if(step < 6) setTimeout(window.goNext, 300); 
+        };
+
+        window.toggleM = (v) => {
+            const i = response.interests.indexOf(v);
+            if(i > -1) response.interests.splice(i, 1); 
+            else response.interests.push(v);
+            updateUI();
+        };
+
+        function updateUI() {
+            const q = questions[step-1];
+            const main = document.getElementById('main-ui');
+            const nav = document.getElementById('nav');
+            const progress = document.getElementById('progress-bar-container');
+            
+            progress.classList.remove('hidden');
+            nav.classList.remove('hidden');
+            
+            let html = `<div class="fade-in"><p class="text-[10px] text-blue-500 font-bold mb-3 uppercase tracking-widest">Question ${step}/6</p><h2 class="text-xl font-bold text-gray-800 mb-8 leading-tight">${q.t}</h2>`;
+            
+            if(q.type === 's') {
+                html += `<div class="grid gap-3">`;
+                q.opts.forEach(o => html += `<button onclick="setS('${q.k}','${o}')" class="btn-opt w-full text-left p-4 rounded-2xl bg-gray-50 text-sm font-medium ${response[q.k]===o?'btn-sel':''}">${o}</button>`);
+                html += `</div>`;
+            } else if(q.type === 'm') {
+                html += `<div class="grid gap-3">`;
+                q.opts.forEach(o => {
+                    const active = response.interests.includes(o);
+                    html += `<button onclick="toggleM('${o}')" class="btn-opt w-full text-left p-4 rounded-2xl bg-gray-50 text-sm font-medium ${active?'btn-sel':''}"><div class="flex justify-between items-center"><span>${o}</span><span>${active?'✓':''}</span></div></button>`;
+                });
+                html += `</div>`;
+            } else {
+                html += `<textarea id="txt" oninput="window.updatePain(this.value)" class="w-full p-5 bg-gray-50 border-0 rounded-2xl h-44 text-sm focus:ring-2 focus:ring-blue-100 outline-none resize-none" placeholder="${q.holder}">${response.pain}</textarea>`;
+            }
+            
+            main.innerHTML = html + `</div>`;
+            document.getElementById('btn-back').style.visibility = step === 1 ? 'hidden' : 'visible';
+            document.getElementById('btn-next').innerText = step === 6 ? '完成送出' : '下一步';
+            document.getElementById('progress-bar').style.width = `${(step / 6) * 100}%`;
+            document.getElementById('progress-text').innerText = `STEP ${step}/6`;
+        }
+
+        window.updatePain = (val) => { response.pain = val; };
+
+        async function finalize() {
+            const main = document.getElementById('main-ui');
+            document.getElementById('nav').classList.add('hidden');
+            document.getElementById('progress-bar-container').classList.add('hidden');
+            main.innerHTML = `<div class="text-center py-20"><div class="loading-spin mx-auto mb-6"></div><p class="text-gray-400 text-sm font-bold tracking-widest">正在存入雲端...</p></div>`;
+            try {
+                const uid = auth.currentUser.uid;
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID, uid);
+                await setDoc(docRef, {
+                    ...response,
+                    org: window.CONFIG.ORG_NAME,
+                    timestamp: new Date().toISOString()
+                });
+                localStorage.setItem('done_' + window.CONFIG.SURVEY_ID, 'true');
+                main.innerHTML = `<div class="text-center fade-in py-10"><div class="text-6xl mb-8">🙌</div><h2 class="text-2xl font-black text-gray-800 mb-3">哈利路亞！</h2><p class="text-gray-500 mb-4 leading-relaxed px-4">您的意見已成功存入雲端，感謝您的協助。</p></div>`;
+            } catch(e) { 
+                alert("提交失敗，請檢查網路。"); 
+                step = 6; updateUI();
+            }
+        }
+
+        // --- 認證 ---
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID, user.uid);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists() || localStorage.getItem('done_' + window.CONFIG.SURVEY_ID)) {
+                    window.showCompletedScreen();
+                }
+            } else {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            }
+        });
+
+        window.showCompletedScreen = () => {
+            const main = document.getElementById('main-ui');
+            main.innerHTML = `<div class="text-center fade-in py-10"><div class="text-6xl mb-8">✅</div><h2 class="text-2xl font-black text-gray-800 mb-3">您已完成填寫</h2><p class="text-gray-400 text-sm">謝謝您的協助，願神祝福您！</p></div>`;
+            document.getElementById('nav').classList.add('hidden');
+        };
+
+        // --- 管理員專屬入口邏輯 ---
+        window.handleAdminEntry = () => {
+            const p = prompt("請輸入管理員密碼：");
+            if(p !== window.CONFIG.ADMIN_PWD) {
+                alert("密碼不正確");
+                window.location.href = window.location.pathname; // 跳回一般頁面
+                return;
+            }
+            
+            const main = document.getElementById('main-ui');
+            document.getElementById('survey-card').classList.remove('hidden');
+            main.innerHTML = `<div class="text-center py-20"><div class="loading-spin mx-auto mb-6"></div><p class="text-gray-400 text-sm font-bold">正在讀取雲端報表...</p></div>`;
+            
+            const colRef = collection(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID);
+            onSnapshot(colRef, (snap) => {
+                const list = snap.docs.map(d => d.data());
+                let html = `<div class="fade-in text-left">
+                    <div class="flex justify-between items-end mb-8">
+                        <div><h2 class="text-2xl font-black text-gray-800">數據統計成果</h2><p class="text-xs text-blue-500 font-bold mt-1 uppercase">共有 ${list.length} 位回覆</p></div>
+                        <button onclick="window.downloadCSV()" class="text-[10px] bg-green-500 text-white px-3 py-1 rounded-lg">下載 Excel</button>
+                    </div>
+                    <div class="space-y-4 max-h-[480px] overflow-auto pr-2 custom-scroll">`;
+                
+                list.sort((a,b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+                list.forEach(r => {
+                    html += `<div class="p-6 bg-gray-50 rounded-[1.5rem] border border-gray-100 shadow-sm mb-4">
+                        <div class="flex justify-between items-center mb-3 text-xs font-black"><span class="text-blue-600 bg-white px-3 py-1.5 rounded-xl border border-blue-50 shadow-sm">${r.age || '未知'}</span><span class="text-gray-300 font-normal">${r.timestamp ? new Date(r.timestamp).toLocaleDateString() : ''}</span></div>
+                        <p class="text-sm font-bold text-gray-700 mb-1 leading-tight">${r.exp || ''}</p>
+                        <p class="text-[10px] text-gray-400 mb-4">${Array.isArray(r.interests)?r.interests.join(' / '): (r.interests || '')}</p>
+                        <div class="bg-white p-4 rounded-2xl text-[11px] text-gray-500 italic leading-relaxed border border-gray-50">"${r.pain || '未填寫'}"</div>
+                    </div>`;
+                });
+                main.innerHTML = html + `</div><button onclick="window.location.href=window.location.pathname" class="mt-8 w-full bg-gray-100 py-5 rounded-2xl text-xs font-bold text-gray-400">登出並返回</button></div>`;
+                window.currentData = list;
+            });
+        };
+
+        window.downloadCSV = () => {
+            const list = window.currentData;
+            if(!list) return;
+            let csv = "\ufeff時間,年齡,經驗,感興趣技能,痛點\n";
+            list.forEach(r => {
+                csv += `${r.timestamp},${r.age},${r.exp},"${Array.isArray(r.interests)?r.interests.join(';'):r.interests}","${r.pain}"\n`;
+            });
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.setAttribute("download", "AI調查結果.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        };
+    </script>
+
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
-        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f8fafc; -webkit-tap-highlight-color: transparent; }
-        .fade-in { animation: fadeIn 0.4s ease-out; }
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f1f5f9; -webkit-tap-highlight-color: transparent; }
+        .fade-in { animation: fadeIn 0.4s ease-out forwards; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .btn-option { transition: all 0.2s; border: 1px solid #e2e8f0; cursor: pointer; user-select: none; }
-        .btn-selected { background-color: #2563eb !important; color: white !important; border-color: #1d4ed8; }
+        .btn-opt { transition: all 0.2s; border: 1px solid #e2e8f0; cursor: pointer; user-select: none; }
+        .btn-sel { background-color: #2563eb !important; color: white !important; border-color: #1d4ed8; transform: scale(0.98); }
+        .loading-spin { border: 3px solid rgba(0,0,0,0.1); border-left-color: #2563eb; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .custom-scroll::-webkit-scrollbar { width: 4px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
     </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
 
-    <!-- 配置區域：您可以直接在這裡修改名稱和密碼 -->
-    <script>
-        const CONFIG = {
-            ORG_NAME: "我的教會",   // <--- 修改您的教會名稱
-            ADMIN_PWD: "2024",     // <--- 修改您的後台密碼
-            SURVEY_ID: "ai-survey-v1"
-        };
-    </script>
-
-    <div id="survey-container" class="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-8 fade-in overflow-hidden relative border border-gray-100">
+    <!-- 初始隱藏，確保頁面邏輯判斷後再顯示 -->
+    <div id="survey-card" class="hidden bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full p-10 fade-in border border-white">
         
-        <!-- 進度條 -->
-        <div id="progress-bar-container" class="hidden mb-6">
-            <div class="flex justify-between text-[10px] text-gray-400 mb-1 uppercase font-bold">
+        <!-- Header -->
+        <div id="header" class="text-center mb-12">
+            <div class="inline-block p-6 bg-blue-50 rounded-[2rem] mb-6 text-4xl shadow-inner">⛪</div>
+            <h1 class="text-xl font-bold text-gray-800 tracking-tight">數位時代新服事</h1>
+            <h2 class="text-3xl font-black text-blue-600 mb-4">AI 系列課程需求調查</h2>
+            <div id="org-banner" class="text-sm text-gray-400">本問卷由 <span id="org-name-text" class="font-bold text-gray-700"></span> 發起</div>
+        </div>
+
+        <div id="progress-bar-container" class="hidden mb-8">
+            <div class="flex justify-between text-[10px] text-gray-400 mb-2 uppercase tracking-widest font-bold">
                 <span id="progress-text">STEP 0/6</span>
                 <span>需求調查</span>
             </div>
-            <div class="w-full bg-gray-100 rounded-full h-1">
-                <div id="progress-bar" class="bg-blue-600 h-1 rounded-full transition-all duration-500" style="width: 0%"></div>
+            <div class="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                <div id="progress-bar" class="bg-blue-600 h-full transition-all duration-500" style="width: 0%"></div>
             </div>
         </div>
 
-        <div id="content">
-            <!-- 初始畫面 -->
-            <div class="text-center py-4">
-                <div class="inline-block p-4 bg-blue-50 rounded-full mb-6 text-3xl">⛪</div>
-                <h1 class="text-xl font-bold text-gray-800 mb-1">數位時代新服事</h1>
-                <h2 class="text-2xl font-black text-blue-600 mb-4">AI 系列課程需求調查</h2>
-                <p class="text-gray-500 mb-8 text-sm leading-relaxed">平安！本問卷由 <span class="font-bold text-blue-600" id="display-org">教會</span> 發起。<br>每人限填一份，約需 30 秒。</p>
-                
-                <div class="space-y-3 mb-8">
-                    <div class="flex items-center gap-3 p-4 bg-gray-50 rounded-2xl text-left border border-gray-100">
-                        <span class="text-blue-500">🕒</span>
-                        <p class="text-xs text-gray-600">每堂課程時間預計為 <strong>2 小時</strong></p>
-                    </div>
-                </div>
-
-                <button onclick="startSurvey()" class="w-full bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold py-4 rounded-2xl shadow-lg transition duration-200">
-                    開始填寫
+        <!-- Main UI -->
+        <div id="main-ui">
+            <div class="text-center">
+                <p class="text-gray-500 mb-12 text-sm leading-relaxed px-2">主內平安！邀請您花 30 秒分享您的想法，幫助我們規劃更優質的 AI 學習課程。您的意見對我們非常重要。</p>
+                <button onclick="beginSurvey()" class="w-full bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold py-5 rounded-2xl shadow-xl shadow-blue-100 transition duration-200">
+                    立即開始填寫
                 </button>
-
-                <div class="mt-12">
-                    <button onclick="openAdmin()" class="text-[10px] text-gray-300 hover:text-blue-500 underline uppercase tracking-widest">後台數據管理</button>
-                </div>
             </div>
         </div>
 
-        <!-- 導覽按鈕 -->
-        <div id="nav-buttons" class="hidden mt-8 flex justify-between gap-3">
-            <button id="prev-btn" onclick="prevStep()" class="flex-1 bg-gray-50 text-gray-500 font-medium py-3 rounded-xl">上一步</button>
-            <button id="next-btn" onclick="nextStep()" class="flex-[2] bg-blue-600 text-white font-bold py-3 rounded-xl shadow-md">下一步</button>
+        <!-- Navigation -->
+        <div id="nav" class="hidden mt-8 flex gap-3">
+            <button id="btn-back" onclick="goBack()" class="flex-1 bg-gray-50 text-gray-400 font-bold py-4 rounded-2xl active:scale-95 transition">上一步</button>
+            <button id="btn-next" onclick="goNext()" class="flex-[2] bg-blue-600 text-white font-bold py-4 rounded-2xl shadow-lg active:scale-95 transition">下一步</button>
         </div>
     </div>
 
-    <script>
-        // 初始化組織名稱
-        document.getElementById('display-org').innerText = CONFIG.ORG_NAME;
-
-        let currentStep = 0;
-        let surveyData = { age: '', experience: '', interests: [], painPoint: '', mode: '', preferredTime: '' };
-
-        const steps = [
-            { id: 'age', title: '您的年齡層？', type: 'single', options: ['青年 (12-18歲)', '社青 (19-35歲)', '壯年 (36-55歲)', '樂齡 (56歲以上)'] },
-            { id: 'experience', title: 'AI 科技熟悉度？', type: 'single', options: ['小白', '初級', '中級', '進階'] },
-            { id: 'interests', title: '想學哪些 AI 技能？', type: 'multi', options: ['生活幫手', '服事同工', '視覺創意', '學生學習', '進階技能'] },
-            { id: 'painPoint', title: '最想解決的一個難點？', type: 'text', placeholder: '例如：製作週報太慢...' },
-            { id: 'mode', title: '偏好的授課方式？', type: 'single', options: ['實體課程', '線上課程', '雙軌並行'] },
-            { id: 'preferredTime', title: '最方便的時段？', type: 'single', options: ['平日晚上', '週六下午', '主日午後'] }
-        ];
-
-        // 檢查是否填過
-        if (localStorage.getItem('submitted_' + CONFIG.SURVEY_ID)) {
-            setTimeout(showAlreadySubmitted, 100);
-        }
-
-        function startSurvey() {
-            currentStep = 1;
-            document.getElementById('progress-bar-container').classList.remove('hidden');
-            renderStep();
-        }
-
-        function renderStep() {
-            const step = steps[currentStep - 1];
-            const content = document.getElementById('content');
-            document.getElementById('nav-buttons').classList.remove('hidden');
-            document.getElementById('progress-bar').style.width = `${(currentStep / steps.length) * 100}%`;
-            document.getElementById('progress-text').innerText = `STEP ${currentStep}/${steps.length}`;
-
-            let html = `<div class="fade-in"><h2 class="text-xl font-bold text-gray-800 mb-6">${step.title}</h2>`;
-            if (step.type === 'single') {
-                html += `<div class="grid gap-3">`;
-                step.options.forEach(opt => {
-                    const isSelected = surveyData[step.id] === opt;
-                    html += `<button onclick="selectSingle('${step.id}', '${opt}')" class="btn-option w-full text-left p-4 rounded-2xl bg-gray-50 text-gray-700 font-medium ${isSelected ? 'btn-selected' : ''}">${opt}</button>`;
-                });
-                html += `</div>`;
-            } else if (step.type === 'multi') {
-                html += `<div class="grid gap-3">`;
-                step.options.forEach(opt => {
-                    const isSelected = surveyData[step.id].includes(opt);
-                    html += `<button onclick="toggleMulti('${opt}')" class="btn-option w-full text-left p-4 rounded-2xl bg-gray-50 text-gray-700 font-medium ${isSelected ? 'btn-selected' : ''}">${opt} ${isSelected ? '✓' : ''}</button>`;
-                });
-                html += `</div>`;
-            } else if (step.type === 'text') {
-                html += `<textarea id="text-input" oninput="surveyData.painPoint = this.value" class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl h-40 text-sm focus:ring-2 focus:ring-blue-100 outline-none" placeholder="${step.placeholder}">${surveyData[step.id]}</textarea>`;
-            }
-            html += `</div>`;
-            content.innerHTML = html;
-            document.getElementById('prev-btn').style.visibility = currentStep === 1 ? 'hidden' : 'visible';
-            document.getElementById('next-btn').innerText = currentStep === steps.length ? '完成送出' : '下一步';
-        }
-
-        function selectSingle(k, v) { 
-            surveyData[k] = v; 
-            renderStep(); 
-            setTimeout(() => { if (currentStep < steps.length) nextStep(); }, 300); 
-        }
-        
-        function toggleMulti(v) {
-            const i = surveyData.interests.indexOf(v);
-            if (i > -1) surveyData.interests.splice(i, 1);
-            else surveyData.interests.push(v);
-            renderStep();
-        }
-
-        function nextStep() {
-            const s = steps[currentStep - 1];
-            if ((s.type === 'single' && !surveyData[s.id]) || (s.type === 'multi' && surveyData.interests.length === 0) || (s.type === 'text' && !surveyData.painPoint.trim())) return alert('請先填寫內容');
-            if (currentStep < steps.length) { currentStep++; renderStep(); } 
-            else { finishSurvey(); }
-        }
-
-        function prevStep() { if (currentStep > 1) { currentStep--; renderStep(); } }
-
-        function finishSurvey() {
-            localStorage.setItem('submitted_' + CONFIG.SURVEY_ID, 'true');
-            const csvRow = `${new Date().toLocaleDateString()},${surveyData.age},${surveyData.experience},"${surveyData.interests.join(';')}",${surveyData.mode},"${surveyData.painPoint.replace(/\n/g, ' ')}"`;
-            
-            const content = document.getElementById('content');
-            document.getElementById('nav-buttons').classList.add('hidden');
-            document.getElementById('progress-bar-container').classList.add('hidden');
-            
-            content.innerHTML = `
-                <div class="text-center fade-in py-8">
-                    <div class="text-5xl mb-6">🙌</div>
-                    <h2 class="text-2xl font-bold text-gray-800 mb-2">提交完成！</h2>
-                    <p class="text-gray-500 mb-8 text-sm">請複製下方代碼回傳至 LINE 給同工：</p>
-                    <div class="bg-blue-50 p-4 rounded-2xl border border-blue-100 mb-10">
-                        <code id="final-code" class="text-[10px] break-all text-blue-600 font-mono select-all">${csvRow}</code>
-                    </div>
-                    <button onclick="copyToClipboard()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl mb-4">一鍵複製代碼</button>
-                    <button onclick="openAdmin()" class="text-xs text-gray-300 underline">管理員後台</button>
-                </div>`;
-        }
-
-        function copyToClipboard() {
-            const code = document.getElementById('final-code').innerText;
-            const el = document.createElement('textarea');
-            el.value = code;
-            document.body.appendChild(el);
-            el.select();
-            document.execCommand('copy');
-            document.body.removeChild(el);
-            alert("代碼已複製！請貼到 LINE 群組。");
-        }
-
-        function showAlreadySubmitted() {
-            const content = document.getElementById('content');
-            content.innerHTML = `
-                <div class="text-center fade-in py-8">
-                    <div class="text-5xl mb-6">✅</div>
-                    <h2 class="text-xl font-bold text-gray-800 mb-2">您已完成填寫</h2>
-                    <p class="text-sm text-gray-400 mb-10">願神祝福您的服事！</p>
-                    <div class="space-y-4">
-                        <button onclick="openAdmin()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl">進入管理後台</button>
-                        <button onclick="resetTest()" class="text-[10px] text-gray-300 underline">清除紀錄 (重新測試)</button>
-                    </div>
-                </div>`;
-            document.getElementById('nav-buttons').classList.add('hidden');
-        }
-
-        function resetTest() {
-            if(confirm("確定要重新測試嗎？")) {
-                localStorage.removeItem('submitted_' + CONFIG.SURVEY_ID);
-                location.reload();
-            }
-        }
-
-        // --- 管理員功能 ---
-        function openAdmin() {
-            const pwd = prompt("請輸入管理員密碼：");
-            if (pwd !== CONFIG.ADMIN_PWD) return alert("密碼錯誤！預設為 2024");
-            
-            const content = document.getElementById('content');
-            content.innerHTML = `
-                <div class="fade-in">
-                    <h2 class="text-lg font-bold text-gray-800 mb-4">數據管理中心</h2>
-                    <p class="text-xs text-gray-400 mb-4">請將大家傳給您的 LINE 代碼全部貼入下方：</p>
-                    <textarea id="import-area" class="w-full h-40 p-4 bg-gray-50 border rounded-2xl text-[10px] focus:ring-2 focus:ring-blue-100 outline-none" placeholder="貼入多行代碼..."></textarea>
-                    
-                    <button onclick="processImport()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-2xl mt-4 mb-8">產生統計圖表</button>
-                    
-                    <div id="stats-result" class="space-y-6 hidden">
-                        <div class="bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                            <h3 class="text-xs font-bold text-gray-400 mb-2 uppercase tracking-widest">填寫總數</h3>
-                            <p class="text-3xl font-black text-blue-600" id="total-count">0</p>
-                        </div>
-                        <div id="age-dist" class="space-y-2"></div>
-                    </div>
-
-                    <button onclick="location.reload()" class="w-full bg-gray-100 py-3 rounded-2xl text-sm mt-10">返回首頁</button>
-                </div>
-            `;
-            document.getElementById('nav-buttons').classList.add('hidden');
-            if(document.getElementById('progress-bar-container')) document.getElementById('progress-bar-container').classList.add('hidden');
-        }
-
-        window.processImport = () => {
-            const raw = document.getElementById('import-area').value;
-            const lines = raw.split('\n').filter(l => l.trim().includes(','));
-            if(lines.length === 0) return alert("請貼入有效的代碼內容");
-
-            document.getElementById('stats-result').classList.remove('hidden');
-            document.getElementById('total-count').innerText = lines.length;
-
-            // 簡單年齡統計示範
-            let ageCounts = {};
-            lines.forEach(l => {
-                const age = l.split(',')[1];
-                if(age) ageCounts[age] = (ageCounts[age] || 0) + 1;
-            });
-
-            let ageHtml = `<h3 class="text-xs font-bold text-gray-400 mb-3 uppercase tracking-widest">年齡分佈</h3>`;
-            for(let key in ageCounts) {
-                const percent = (ageCounts[key] / lines.length * 100).toFixed(0);
-                ageHtml += `
-                    <div class="text-xs">
-                        <div class="flex justify-between mb-1"><span>${key}</span><span>${ageCounts[key]} 人 (${percent}%)</span></div>
-                        <div class="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-                            <div class="bg-blue-500 h-full" style="width: ${percent}%"></div>
-                        </div>
-                    </div>`;
-            }
-            document.getElementById('age-dist').innerHTML = ageHtml;
-        };
-    </script>
 </body>
 </html>
