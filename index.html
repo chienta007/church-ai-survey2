@@ -9,9 +9,10 @@
     <script>
         // --- 1. 管理員基本設定 ---
         window.CONFIG = {
-            ORG_NAME: "我的教會", 
+            ORG_NAME: "我的教會-001", 
             ADMIN_PWD: "2024",
             SURVEY_ID: "church_ai_v2", 
+            // 這些金鑰在 GitHub 環境下會被使用
             FIREBASE_SETTING: {
                 apiKey: "AIzaSyDapTicgqPQG-c-5lCFD0qs_IfhYU93xPU",
                 authDomain: "church-ai-survey2.firebaseapp.com",
@@ -29,14 +30,20 @@
         import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         let db, auth, appId;
-        let isAuthReady = false;
+        let isReady = false;
 
         async function initApp() {
+            const loadingText = document.getElementById('loading-txt');
             try {
-                // 1. 初始化 Firebase 環境
+                // 1. 智慧偵測 Firebase 配置 (Canvas vs GitHub)
                 let firebaseConfig = window.CONFIG.FIREBASE_SETTING;
                 if (typeof __firebase_config !== 'undefined' && __firebase_config) {
                     firebaseConfig = JSON.parse(__firebase_config);
+                }
+                
+                // 確保 apiKey 始終有效
+                if (!firebaseConfig.apiKey) {
+                    firebaseConfig.apiKey = window.CONFIG.FIREBASE_SETTING.apiKey;
                 }
 
                 const app = initializeApp(firebaseConfig);
@@ -48,82 +55,100 @@
                 window.auth = auth;
                 window.appId = appId;
 
-                // 2. 核心認證 (確保 await 完成)
-                const runAuth = async () => {
+                // 2. 核心認證流程 (RULE 3: Auth FIRST and AWAIT)
+                loadingText.innerText = "正在同步數位服事授權...";
+                
+                const performAuth = async () => {
+                    // 優先使用環境 Token (Canvas 專用)
                     if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        return await signInWithCustomToken(auth, __initial_auth_token);
+                        try {
+                            return await signInWithCustomToken(auth, __initial_auth_token);
+                        } catch (e) {
+                            console.warn("Custom token auth failed, falling back to anonymous.");
+                            return await signInAnonymously(auth);
+                        }
                     } else {
                         return await signInAnonymously(auth);
                     }
                 };
                 
-                await runAuth();
+                await performAuth();
 
-                // 3. 監聽認證狀態 (確定拿到 UID 才啟動 UI)
+                // 3. 監聽認證狀態 (確定拿到身份才開放 UI)
                 onAuthStateChanged(auth, async (user) => {
-                    if (!user) return;
-                    
-                    isAuthReady = true;
-                    window.currentUser = user;
-                    const urlParams = new URLSearchParams(window.location.search);
-                    
-                    if (!urlParams.has('admin')) {
-                        try {
-                            const docRef = doc(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID, user.uid);
-                            const docSnap = await getDoc(docRef);
-                            
-                            if (docSnap.exists() || localStorage.getItem('done_' + window.CONFIG.SURVEY_ID)) {
-                                window.showCompletedScreen();
-                            } else {
-                                document.getElementById('survey-card').style.display = 'block';
+                    if (user && !isReady) {
+                        isReady = true;
+                        window.currentUser = user;
+                        
+                        const urlParams = new URLSearchParams(window.location.search);
+                        if (!urlParams.has('admin')) {
+                            try {
+                                const docRef = doc(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID, user.uid);
+                                const docSnap = await getDoc(docRef);
+                                
+                                if (docSnap.exists() || localStorage.getItem('done_' + window.CONFIG.SURVEY_ID)) {
+                                    window.showCompletedScreen();
+                                } else {
+                                    document.getElementById('loading-overlay').style.display = 'none';
+                                    document.getElementById('survey-card').style.display = 'block';
+                                    document.getElementById('org-display').innerText = window.CONFIG.ORG_NAME;
+                                }
+                            } catch (e) {
+                                console.error("Permission Check Failed:", e);
+                                // 即使檢查失敗也顯示頁面，讓使用者可以嘗試提交
                                 document.getElementById('loading-overlay').style.display = 'none';
-                                document.getElementById('org-display').innerText = window.CONFIG.ORG_NAME;
+                                document.getElementById('survey-card').style.display = 'block';
                             }
-                        } catch (e) {
-                            console.error("Permission Error:", e);
-                            document.getElementById('loading-txt').innerText = "連線失敗，請檢查資料庫 Rules 是否正確。";
+                        } else {
+                            window.handleAdminMode();
                         }
-                    } else {
-                        window.handleAdminMode();
                     }
                 });
             } catch (err) {
-                console.error("Firebase Init Error:", err);
-                document.getElementById('loading-txt').innerText = "系統初始化失敗，請檢查網路連線。";
+                console.error("Init Error:", err);
+                loadingText.innerHTML = `<span class="text-red-500 font-bold">系統連線失敗</span><br><span class="text-xs text-gray-400 mt-2 block">請確認是否已在 Firebase 開啟 Firestore 測試模式</span>`;
             }
         }
-        initApp();
+        
+        window.addEventListener('load', initApp);
 
-        // 提交數據邏輯 (加入嚴格 User 檢查)
+        // 提交數據
         window.saveSurvey = async (data) => {
-            const user = auth.currentUser;
-            if (!user) {
-                alert("連線不穩，尚未獲取數位身份，請重新整理頁面。");
+            if (!auth.currentUser) {
+                alert("連線不穩定，請重新整理頁面。");
                 return;
             }
             
             const main = document.getElementById('main-ui');
-            main.innerHTML = `<div class="text-center py-20"><div class="loading-spin mx-auto mb-4"></div><p class="text-gray-400 text-sm">數據飛向雲端中...</p></div>`;
+            main.innerHTML = `<div class="text-center py-20"><div class="loading-spin mx-auto mb-4"></div><p class="text-gray-400 text-sm font-bold">正在同步至雲端...</p></div>`;
             
             try {
-                const docRef = doc(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID, user.uid);
-                await setDoc(docRef, { ...data, org: window.CONFIG.ORG_NAME, timestamp: new Date().toISOString(), userId: user.uid });
+                const uid = auth.currentUser.uid;
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID, uid);
+                await setDoc(docRef, { 
+                    ...data, 
+                    org: window.CONFIG.ORG_NAME, 
+                    timestamp: new Date().toISOString(),
+                    userId: uid 
+                });
                 
                 localStorage.setItem('done_' + window.CONFIG.SURVEY_ID, 'true');
                 window.showCompletedScreen();
             } catch (e) {
-                alert("儲存失敗！錯誤代碼：" + e.code + "\n請確保資料庫 Rules 已設為測試模式。");
+                console.error("Save failed:", e);
+                alert("儲存失敗！請務必確認 Firebase 控制台 Rules 已設為『測試模式』。");
                 location.reload();
             }
         };
 
+        // 後台監聽
         window.fetchAdminData = (onUpdate) => {
             if (!auth.currentUser) return;
             const colRef = collection(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID);
             onSnapshot(colRef, (snap) => {
                 onUpdate(snap.docs.map(d => d.data()));
             }, (err) => {
-                alert("讀取失敗：權限不足，請檢查 Rules。");
+                alert("無法讀取統計數據：權限不足。請檢查 Firebase Rules 規則。");
                 location.reload();
             });
         };
@@ -136,7 +161,7 @@
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .btn-opt { transition: all 0.2s; border: 1px solid #e2e8f0; cursor: pointer; user-select: none; }
         .btn-sel { background-color: #2563eb !important; color: white !important; border-color: #1d4ed8; }
-        .loading-spin { border: 3px solid rgba(0,0,0,0.1); border-left-color: #2563eb; border-radius: 50%; width: 28px; height: 28px; animation: spin 1s linear infinite; }
+        .loading-spin { border: 3px solid rgba(0,0,0,0.1); border-left-color: #2563eb; border-radius: 50%; width: 32px; height: 32px; animation: spin 1s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
         .custom-scroll::-webkit-scrollbar { width: 4px; }
         .custom-scroll::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
@@ -144,24 +169,24 @@
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
 
-    <!-- 全螢幕加載遮罩 -->
+    <!-- 加載遮罩 -->
     <div id="loading-overlay" class="fixed inset-0 bg-white z-50 flex items-center justify-center">
-        <div class="text-center">
-            <div class="loading-spin mx-auto mb-4"></div>
-            <p id="loading-txt" class="text-gray-400 text-sm font-medium">與雲端同步中，請稍候...</p>
+        <div class="text-center px-10">
+            <div class="loading-spin mx-auto mb-6"></div>
+            <p id="loading-txt" class="text-gray-400 text-sm font-bold tracking-widest uppercase">正在同步雲端環境...</p>
         </div>
     </div>
 
     <div id="survey-card" style="display:none;" class="bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full p-10 fade-in">
         <div id="header" class="text-center mb-10">
-            <div class="inline-block p-6 bg-blue-50 rounded-[2rem] mb-6 text-4xl">⛪</div>
+            <div class="inline-block p-6 bg-blue-50 rounded-[2rem] mb-6 text-4xl shadow-inner">⛪</div>
             <h1 class="text-xl font-bold tracking-tight">數位時代新服事</h1>
             <h2 class="text-2xl font-black text-blue-600 mb-2">AI 系列課程需求調查</h2>
-            <p class="text-xs text-gray-400">本問卷由 <span id="org-display" class="font-bold">...</span> 發起</p>
+            <p class="text-xs text-gray-400 font-medium">本問卷由 <span id="org-display" class="font-black text-gray-600">...</span> 發起</p>
         </div>
 
         <div id="progress-area" class="hidden mb-8">
-            <div class="flex justify-between text-[10px] text-gray-400 mb-2 font-black uppercase">
+            <div class="flex justify-between text-[10px] text-gray-400 mb-2 font-black uppercase tracking-widest">
                 <span id="step-txt">STEP 0/6</span>
                 <span>調查進行中</span>
             </div>
@@ -172,8 +197,8 @@
 
         <div id="main-ui">
             <div class="text-center">
-                <p class="text-gray-500 mb-12 text-sm leading-relaxed px-4">主內平安！邀請您花 30 秒填寫，協助我們規劃更適合教會需要的 AI 課程。</p>
-                <button onclick="begin()" class="w-full bg-blue-600 text-white font-bold py-5 rounded-2xl shadow-xl active:scale-95 transition">
+                <p class="text-gray-500 mb-12 text-sm leading-relaxed px-2 font-medium">主內平安！邀請您花 30 秒填寫，協助我們規劃更貼近弟兄姊妹需要的 AI 課程。</p>
+                <button onclick="begin()" class="w-full bg-blue-600 text-white font-bold py-5 rounded-2xl shadow-xl shadow-blue-100 active:scale-95 transition">
                     立即開始填寫
                 </button>
             </div>
@@ -192,7 +217,7 @@
             { k: 'age', t: '您的年齡層？', type: 's', opts: ['青年 (12-18歲)', '社青 (19-35歲)', '壯年 (36-55歲)', '樂齡 (56歲以上)'] },
             { k: 'exp', t: 'AI 科技熟悉度？', type: 's', opts: ['小白 (沒用過)', '初級 (聽過/偶爾用)', '中級 (常用)', '進階 (指令專家)'] },
             { k: 'interests', t: '想學哪些 AI 技能？', type: 'm', opts: ['生活幫手', '服事同工', '視覺創意', '學生學習', '進階自動化'] },
-            { k: 'pain', t: '最想解決的一個難點？', type: 't', holder: '例如：週報製作太慢...' },
+            { k: 'pain', t: '最想解決的一個難點？', type: 't', holder: '例如：製作週報太慢、想做精美海報...' },
             { k: 'mode', t: '偏好的授課方式？', type: 's', opts: ['實體課程', '線上課程', '雙軌並行'] },
             { k: 'time', t: '最方便的時段？', type: 's', opts: ['平日晚上', '週六下午', '主日午後'] }
         ];
@@ -207,20 +232,20 @@
             document.getElementById('step-txt').innerText = `STEP ${step}/6`;
             document.getElementById('progress-bar').style.width = `${(step/6)*100}%`;
 
-            let html = `<div class="fade-in"><h2 class="text-xl font-bold mb-8">${q.t}</h2>`;
+            let html = `<div class="fade-in"><h2 class="text-xl font-bold mb-8 text-gray-800">${q.t}</h2>`;
             if(q.type === 's') {
                 html += `<div class="grid gap-3">`;
-                q.opts.forEach(o => html += `<button onclick="pickS('${o}')" class="btn-opt w-full text-left p-4 rounded-2xl bg-gray-50 ${answers[q.k]===o?'btn-sel':''}">${o}</button>`);
+                q.opts.forEach(o => html += `<button onclick="pickS('${o}')" class="btn-opt w-full text-left p-4 rounded-2xl bg-gray-50 text-sm font-bold ${answers[q.k]===o?'btn-sel':''}">${o}</button>`);
                 html += `</div>`;
             } else if(q.type === 'm') {
                 html += `<div class="grid gap-3">`;
                 q.opts.forEach(o => {
                     const active = answers.interests.includes(o);
-                    html += `<button onclick="pickM('${o}')" class="btn-opt w-full text-left p-4 rounded-2xl bg-gray-50 ${active?'btn-sel':''}"><div class="flex justify-between"><span>${o}</span><span>${active?'✓':''}</span></div></button>`;
+                    html += `<button onclick="pickM('${o}')" class="btn-opt w-full text-left p-4 rounded-2xl bg-gray-50 text-sm font-bold ${active?'btn-sel':''}"><div class="flex justify-between"><span>${o}</span><span>${active?'✓':''}</span></div></button>`;
                 });
                 html += `</div>`;
             } else {
-                html += `<textarea oninput="answers.pain=this.value" class="w-full p-5 bg-gray-50 border-0 rounded-2xl h-44 outline-none focus:ring-2 focus:ring-blue-100" placeholder="${q.holder}">${answers.pain}</textarea>`;
+                html += `<textarea oninput="answers.pain=this.value" class="w-full p-5 bg-gray-50 border-0 rounded-2xl h-44 outline-none focus:ring-2 focus:ring-blue-100 text-sm font-medium" placeholder="${q.holder}">${answers.pain}</textarea>`;
             }
             main.innerHTML = html + `</div>`;
             document.getElementById('btn-back').style.visibility = step === 1 ? 'hidden' : 'visible';
@@ -242,35 +267,35 @@
         window.back = () => { if(step > 1) { step--; update(); } };
 
         window.showCompletedScreen = () => {
-            document.getElementById('survey-card').style.display = 'block';
             document.getElementById('loading-overlay').style.display = 'none';
+            document.getElementById('survey-card').style.display = 'block';
             document.getElementById('progress-area').classList.add('hidden');
             document.getElementById('nav').classList.add('hidden');
             document.getElementById('main-ui').innerHTML = `
                 <div class="text-center fade-in py-10">
-                    <div class="text-6xl mb-8">✅</div>
-                    <h2 class="text-2xl font-black mb-2">您已完成填寫</h2>
-                    <p class="text-gray-400 mb-10 text-sm">您的心聲我們收到了，哈利路亞！</p>
-                    <button onclick="enterAdmin()" class="w-full bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg active:scale-95">查看成果</button>
-                    <button onclick="localStorage.removeItem('done_'+window.CONFIG.SURVEY_ID);location.reload();" class="mt-8 text-[10px] text-gray-300 underline tracking-widest block mx-auto">清除紀錄 (重新測試)</button>
+                    <div class="text-6xl mb-8 text-blue-500">✅</div>
+                    <h2 class="text-2xl font-black mb-2 text-gray-800">您已完成填寫</h2>
+                    <p class="text-gray-400 mb-10 text-sm font-medium">謝謝您的協助！心聲已存入雲端。</p>
+                    <button onclick="enterAdmin()" class="w-full bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg active:scale-95 transition">查看即時統計成果</button>
+                    <button onclick="localStorage.removeItem('done_'+window.CONFIG.SURVEY_ID);location.reload();" class="mt-8 text-[10px] text-gray-300 underline tracking-widest block mx-auto font-bold uppercase">清除本機紀錄 (測試用)</button>
                 </div>`;
         };
 
         window.enterAdmin = () => {
-            const p = prompt("密碼：");
+            const p = prompt("請輸入管理員密碼：");
             if (p !== window.CONFIG.ADMIN_PWD) return alert("密碼錯誤");
-            document.getElementById('main-ui').innerHTML = `<div class="text-center py-20"><div class="loading-spin mx-auto mb-4"></div><p class="text-gray-400">連線中...</p></div>`;
+            document.getElementById('main-ui').innerHTML = `<div class="text-center py-20"><div class="loading-spin mx-auto mb-4"></div><p class="text-gray-400 text-sm font-bold">數據同步中...</p></div>`;
             window.fetchAdminData((list) => {
-                let html = `<div class="fade-in text-left"><div class="flex justify-between items-center mb-6"><div><h2 class="text-xl font-bold">即時統計成果</h2><p class="text-[10px] text-blue-500 font-bold uppercase">收到 ${list.length} 份回覆</p></div><button onclick="dlExcel(window.cachedList)" class="bg-green-500 text-white text-[10px] px-3 py-2 rounded-lg">匯出</button></div><div class="space-y-3 max-h-96 overflow-auto custom-scroll">`;
+                let html = `<div class="fade-in text-left"><div class="flex justify-between items-center mb-6"><div><h2 class="text-xl font-bold text-gray-800">統計成果</h2><p class="text-[10px] text-blue-500 font-black uppercase tracking-widest">目前共有 ${list.length} 筆回覆</p></div><button onclick="dlExcel(window.cachedList)" class="bg-green-500 text-white text-[10px] font-bold px-3 py-2 rounded-lg shadow-sm">匯出 Excel</button></div><div class="space-y-3 max-h-96 overflow-auto pr-2 custom-scroll">`;
                 list.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
                 list.forEach(r => {
-                    html += `<div class="p-4 bg-gray-50 rounded-2xl border border-gray-100 text-xs">
+                    html += `<div class="p-4 bg-gray-50 rounded-2xl border border-gray-100 text-xs shadow-sm">
                         <div class="flex justify-between mb-2"><span class="font-black text-blue-600 bg-white px-2 py-0.5 rounded border border-blue-50">${r.age}</span><span class="text-gray-300 font-normal">${new Date(r.timestamp).toLocaleDateString()}</span></div>
-                        <p class="mb-1"><b>${r.exp}</b></p>
+                        <p class="mb-1 text-gray-700"><b>${r.exp}</b></p>
                         <p class="text-gray-400 italic">"${r.pain || '未填寫'}"</p>
                     </div>`;
                 });
-                document.getElementById('main-ui').innerHTML = html + `</div><button onclick="location.reload()" class="mt-8 w-full py-4 text-xs text-gray-400 font-bold bg-gray-100 rounded-xl transition">離開</button></div>`;
+                document.getElementById('main-ui').innerHTML = html + `</div><button onclick="location.reload()" class="mt-8 w-full py-4 text-xs text-gray-400 font-black bg-gray-100 rounded-xl hover:bg-gray-200 transition uppercase tracking-widest">離開後台</button></div>`;
                 window.cachedList = list;
             });
         };
