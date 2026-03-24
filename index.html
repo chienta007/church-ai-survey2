@@ -30,11 +30,11 @@
 
         let db, auth, appId;
 
-        async function setupFirebase() {
+        async function initApp() {
             try {
+                // 1. 初始化 Firebase 環境
                 let firebaseConfig = window.CONFIG.FIREBASE_SETTING;
-                // 優先使用預覽環境設定
-                if (typeof __firebase_config !== 'undefined') {
+                if (typeof __firebase_config !== 'undefined' && __firebase_config) {
                     firebaseConfig = JSON.parse(__firebase_config);
                 }
 
@@ -47,18 +47,27 @@
                 window.auth = auth;
                 window.appId = appId;
 
-                // 核心認證 (RULE 3)
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
+                // 2. 執行認證 (RULE 3 - FIRST and AWAIT)
+                const authenticate = async () => {
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        return await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        return await signInAnonymously(auth);
+                    }
+                };
+                
+                await authenticate();
 
+                // 3. 監聽認證狀態並初始化 UI
                 onAuthStateChanged(auth, async (user) => {
-                    if (user) {
-                        const urlParams = new URLSearchParams(window.location.search);
-                        if (!urlParams.has('admin')) {
-                            // 檢查雲端是否填過
+                    if (!user) return;
+                    
+                    window.currentUser = user;
+                    const urlParams = new URLSearchParams(window.location.search);
+                    
+                    if (!urlParams.has('admin')) {
+                        try {
+                            // 檢查是否已填過 (雲端檢查)
                             const docRef = doc(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID, user.uid);
                             const docSnap = await getDoc(docRef);
                             
@@ -68,43 +77,55 @@
                                 document.getElementById('survey-card').style.display = 'block';
                                 document.getElementById('loading-overlay').style.display = 'none';
                             }
-                        } else {
-                            window.handleAdmin();
+                        } catch (e) {
+                            console.error("Permission Error during initial check:", e);
+                            document.getElementById('main-ui').innerHTML = `<div class="text-red-500 text-sm p-4">資料庫權限不足，請聯繫管理員檢查 Firebase Rules。</div>`;
+                            document.getElementById('survey-card').style.display = 'block';
+                            document.getElementById('loading-overlay').style.display = 'none';
                         }
+                    } else {
+                        window.handleAdminMode();
                     }
                 });
             } catch (err) {
-                console.error("Firebase Error:", err);
-                document.getElementById('survey-card').style.display = 'block';
-                document.getElementById('loading-overlay').style.display = 'none';
+                console.error("Initialization Error:", err);
+                alert("系統初始化失敗，請檢查金鑰或網路。");
             }
         }
-        setupFirebase();
+        initApp();
 
-        // 提交問卷
-        window.finalizeData = async (data) => {
-            const container = document.getElementById('main-ui');
-            container.innerHTML = `<div class="text-center py-20"><div class="loading-spin mx-auto mb-4"></div><p class="text-gray-400">正在同步至雲端...</p></div>`;
+        // 提交數據邏輯
+        window.saveSurvey = async (data) => {
+            if (!auth.currentUser) return alert("尚未登入，無法送出資料。");
+            
+            const main = document.getElementById('main-ui');
+            main.innerHTML = `<div class="text-center py-20"><div class="loading-spin mx-auto mb-4"></div><p class="text-gray-400 text-sm">正在同步至雲端...</p></div>`;
             
             try {
                 const uid = auth.currentUser.uid;
                 const docRef = doc(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID, uid);
-                await setDoc(docRef, { ...data, org: window.CONFIG.ORG_NAME, timestamp: new Date().toISOString() });
+                await setDoc(docRef, { ...data, org: window.CONFIG.ORG_NAME, timestamp: new Date().toISOString(), userId: uid });
                 
                 localStorage.setItem('done_' + window.CONFIG.SURVEY_ID, 'true');
                 window.showCompletedScreen();
             } catch (e) {
-                alert("儲存失敗：請確認資料庫 Rules 已改為測試模式！\n" + e.message);
+                console.error("Save Error:", e);
+                alert("提交失敗！請確認 Firebase 控制台中的 Firestore Rules 已改為『測試模式』。錯誤碼：" + e.code);
                 location.reload();
             }
         };
 
-        // 管理員監聽
-        window.startAdminListener = (callback) => {
+        // 管理員後台監聽
+        window.fetchAdminData = (onUpdate) => {
+            if (!auth.currentUser) return;
             const colRef = collection(db, 'artifacts', appId, 'public', 'data', window.CONFIG.SURVEY_ID);
             onSnapshot(colRef, (snap) => {
-                callback(snap.docs.map(d => d.data()));
-            }, (err) => alert("權限不足或 Rules 未開啟"));
+                onUpdate(snap.docs.map(d => d.data()));
+            }, (err) => {
+                console.error("Snapshot Error:", err);
+                alert("無法讀取數據：權限不足。請確保 Firestore Rules 設定正確。");
+                location.reload();
+            });
         };
     </script>
 
@@ -117,31 +138,31 @@
         .btn-sel { background-color: #2563eb !important; color: white !important; border-color: #1d4ed8; }
         .loading-spin { border: 3px solid rgba(0,0,0,0.1); border-left-color: #2563eb; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
+        .custom-scroll::-webkit-scrollbar { width: 4px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
     </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-4 text-gray-800">
 
-    <!-- 載入中遮罩 -->
     <div id="loading-overlay" class="fixed inset-0 bg-white z-50 flex items-center justify-center">
         <div class="text-center">
             <div class="loading-spin mx-auto mb-4"></div>
-            <p class="text-gray-400 text-sm">正在連線雲端...</p>
+            <p class="text-gray-400 text-sm">正在同步雲端服務...</p>
         </div>
     </div>
 
-    <div id="survey-card" style="display:none;" class="bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full p-10 fade-in">
-        
-        <div id="header-ui" class="text-center mb-10">
+    <div id="survey-card" style="display:none;" class="bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full p-10 fade-in relative">
+        <div id="header" class="text-center mb-10">
             <div class="inline-block p-6 bg-blue-50 rounded-[2rem] mb-6 text-4xl">⛪</div>
             <h1 class="text-xl font-bold text-gray-800 tracking-tight">數位時代新服事</h1>
             <h2 class="text-2xl font-black text-blue-600 mb-2">AI 系列課程需求調查</h2>
-            <p class="text-xs text-gray-400">本問卷由 <span id="org-text" class="font-bold">載入中...</span> 發起</p>
+            <p class="text-xs text-gray-400">本問卷由 <span id="org-display" class="font-bold">載入中</span> 發起</p>
         </div>
 
-        <div id="progress-container" class="hidden mb-8">
-            <div class="flex justify-between text-[10px] text-gray-400 mb-2 font-black uppercase">
-                <span id="step-count">STEP 0/6</span>
-                <span>調查中</span>
+        <div id="progress-area" class="hidden mb-8">
+            <div class="flex justify-between text-[10px] text-gray-400 mb-2 font-black">
+                <span id="step-txt">STEP 0/6</span>
+                <span>需求調查中</span>
             </div>
             <div class="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
                 <div id="progress-bar" class="bg-blue-600 h-full transition-all duration-500" style="width: 0%"></div>
@@ -150,123 +171,119 @@
 
         <div id="main-ui">
             <div class="text-center">
-                <p class="text-gray-500 mb-12 text-sm leading-relaxed">平安！邀請您分享想法，協助我們規劃最適合教會的 AI 學習課程。</p>
-                <button onclick="startSurvey()" class="w-full bg-blue-600 text-white font-bold py-5 rounded-2xl shadow-xl active:scale-95 transition">
+                <p class="text-gray-500 mb-12 text-sm leading-relaxed px-4">主內平安！邀請您花 30 秒填寫，幫助我們規劃更貼合需要的 AI 學習課程。</p>
+                <button onclick="begin()" class="w-full bg-blue-600 text-white font-bold py-5 rounded-2xl shadow-xl shadow-blue-100 active:scale-95 transition">
                     立即開始填寫
                 </button>
             </div>
         </div>
 
-        <div id="nav-ui" class="hidden mt-8 flex gap-3">
-            <button id="btn-prev" onclick="prevStep()" class="flex-1 bg-gray-50 text-gray-400 font-bold py-4 rounded-2xl active:scale-95 transition">上一步</button>
-            <button id="btn-next" onclick="nextStep()" class="flex-[2] bg-blue-600 text-white font-bold py-4 rounded-2xl shadow-lg active:scale-95 transition">下一步</button>
+        <div id="nav" class="hidden mt-8 flex gap-3">
+            <button id="btn-back" onclick="back()" class="flex-1 bg-gray-50 text-gray-400 font-bold py-4 rounded-2xl active:scale-95 transition">上一步</button>
+            <button id="btn-next" onclick="next()" class="flex-[2] bg-blue-600 text-white font-bold py-4 rounded-2xl shadow-lg active:scale-95 transition">下一步</button>
         </div>
     </div>
 
     <script>
-        let currentStep = 0;
-        const surveyData = { age: '', exp: '', interests: [], pain: '', mode: '', time: '' };
-        const questions = [
-            { id: 'age', t: '您的年齡層？', type: 's', opts: ['青年 (12-18歲)', '社青 (19-35歲)', '壯年 (36-55歲)', '樂齡 (56歲以上)'] },
-            { id: 'exp', t: 'AI 科技熟悉度？', type: 's', opts: ['小白 (沒用過)', '初級 (聽過/偶爾用)', '中級 (常用)', '進階 (下指令專家)'] },
-            { id: 'interests', t: '想學哪些 AI 技能？', type: 'm', opts: ['生活幫手', '服事同工 (摘要/週報)', '視覺創意 (繪圖)', '學生學習', '進階技能 (自動化)'] },
-            { id: 'pain', t: '最想解決的一個難點？', type: 't', holder: '例如：製作週報太慢、想做精美海報...' },
-            { id: 'mode', t: '偏好的授課方式？', type: 's', opts: ['實體課程', '線上課程', '雙軌並行'] },
-            { id: 'time', t: '最方便的時段？', type: 's', opts: ['平日晚上', '週六下午', '主日午後'] }
+        let step = 0;
+        const answers = { age: '', exp: '', interests: [], pain: '', mode: '', time: '' };
+        const qs = [
+            { k: 'age', t: '您的年齡層？', type: 's', opts: ['青年 (12-18歲)', '社青 (19-35歲)', '壯年 (36-55歲)', '樂齡 (56歲以上)'] },
+            { k: 'exp', t: 'AI 科技熟悉度？', type: 's', opts: ['小白 (沒用過)', '初級 (聽過/偶爾用)', '中級 (常用)', '進階 (指令專家)'] },
+            { k: 'interests', t: '想學哪些 AI 技能？', type: 'm', opts: ['生活幫手', '服事同工', '視覺創意', '學生學習', '進階自動化'] },
+            { k: 'pain', t: '最想解決的一個難點？', type: 't', holder: '例如：週報製作太慢...' },
+            { k: 'mode', t: '偏好的授課方式？', type: 's', opts: ['實體課程', '線上課程', '雙軌並行'] },
+            { k: 'time', t: '最方便的時段？', type: 's', opts: ['平日晚上', '週六下午', '主日午後'] }
         ];
 
-        function startSurvey() {
-            currentStep = 1;
-            document.getElementById('progress-container').classList.remove('hidden');
-            render();
-        }
+        function begin() { step = 1; document.getElementById('progress-area').classList.remove('hidden'); update(); }
 
-        function render() {
-            const q = questions[currentStep - 1];
+        function update() {
+            const q = qs[step-1];
             const main = document.getElementById('main-ui');
-            const nav = document.getElementById('nav-ui');
+            const nav = document.getElementById('nav');
             nav.classList.remove('hidden');
             
-            document.getElementById('step-count').innerText = `STEP ${currentStep}/6`;
-            document.getElementById('progress-bar').style.width = `${(currentStep / 6) * 100}%`;
+            document.getElementById('step-txt').innerText = `STEP ${step}/6`;
+            document.getElementById('progress-bar').style.width = `${(step/6)*100}%`;
 
-            let html = `<div class="fade-in"><h2 class="text-xl font-bold mb-6">${q.t}</h2>`;
-            if (q.type === 's') {
+            let html = `<div class="fade-in"><h2 class="text-xl font-bold mb-8 text-gray-800">${q.t}</h2>`;
+            if(q.type === 's') {
                 html += `<div class="grid gap-3">`;
-                q.opts.forEach(o => html += `<button onclick="setS('${o}')" class="btn-opt w-full text-left p-4 rounded-2xl bg-gray-50 ${surveyData[q.id]===o?'btn-sel':''}">${o}</button>`);
+                q.opts.forEach(o => html += `<button onclick="pickS('${o}')" class="btn-opt w-full text-left p-4 rounded-2xl bg-gray-50 ${answers[q.k]===o?'btn-sel':''}">${o}</button>`);
                 html += `</div>`;
-            } else if (q.type === 'm') {
+            } else if(q.type === 'm') {
                 html += `<div class="grid gap-3">`;
                 q.opts.forEach(o => {
-                    const sel = surveyData.interests.includes(o);
-                    html += `<button onclick="toggleM('${o}')" class="btn-opt w-full text-left p-4 rounded-2xl bg-gray-50 ${sel?'btn-sel':''}"><div class="flex justify-between"><span>${o}</span><span>${sel?'✓':''}</span></div></button>`;
+                    const active = answers.interests.includes(o);
+                    html += `<button onclick="pickM('${o}')" class="btn-opt w-full text-left p-4 rounded-2xl bg-gray-50 ${active?'btn-sel':''}"><div class="flex justify-between"><span>${o}</span><span>${active?'✓':''}</span></div></button>`;
                 });
                 html += `</div>`;
             } else {
-                html += `<textarea oninput="surveyData.pain=this.value" class="w-full p-4 bg-gray-50 rounded-2xl h-40 outline-none focus:ring-2 focus:ring-blue-100" placeholder="${q.holder}">${surveyData.pain}</textarea>`;
+                html += `<textarea oninput="answers.pain=this.value" class="w-full p-5 bg-gray-50 border-0 rounded-2xl h-44 outline-none focus:ring-2 focus:ring-blue-100" placeholder="${q.holder}">${answers.pain}</textarea>`;
             }
             main.innerHTML = html + `</div>`;
-            document.getElementById('btn-prev').style.visibility = currentStep === 1 ? 'hidden' : 'visible';
-            document.getElementById('btn-next').innerText = currentStep === 6 ? '確認送出' : '下一步';
+            document.getElementById('btn-back').style.visibility = step === 1 ? 'hidden' : 'visible';
+            document.getElementById('btn-next').innerText = step === 6 ? '提交問卷' : '下一步';
         }
 
-        window.setS = (v) => { surveyData[questions[currentStep-1].id] = v; render(); if(currentStep < 6) setTimeout(nextStep, 300); };
-        window.toggleM = (v) => {
-            const i = surveyData.interests.indexOf(v);
-            if(i > -1) surveyData.interests.splice(i,1); else surveyData.interests.push(v);
-            render();
+        window.pickS = (v) => { answers[qs[step-1].k] = v; update(); if(step<6) setTimeout(next, 300); };
+        window.pickM = (v) => {
+            const i = answers.interests.indexOf(v);
+            if(i>-1) answers.interests.splice(i,1); else answers.interests.push(v);
+            update();
         };
 
-        window.nextStep = () => {
-            const q = questions[currentStep-1];
-            if ((q.type==='s' && !surveyData[q.id]) || (q.type==='m' && surveyData.interests.length===0) || (q.type==='t' && !surveyData.pain.trim())) return alert("請完成本題選項喔！");
-            if (currentStep < 6) { currentStep++; render(); } else { finalizeData(surveyData); }
+        window.next = () => {
+            const q = qs[step-1];
+            if((q.type==='s'&&!answers[q.k]) || (q.type==='m'&&answers.interests.length===0) || (q.type==='t'&&!answers.pain.trim())) return alert("請先填寫完畢喔！");
+            if(step < 6) { step++; update(); } else { saveSurvey(answers); }
         };
-        window.prevStep = () => { if(currentStep > 1) { currentStep--; render(); } };
+        window.back = () => { if(step > 1) { step--; update(); } };
 
         window.showCompletedScreen = () => {
             document.getElementById('survey-card').style.display = 'block';
             document.getElementById('loading-overlay').style.display = 'none';
-            document.getElementById('progress-container').classList.add('hidden');
-            document.getElementById('nav-ui').classList.add('hidden');
+            document.getElementById('progress-area').classList.add('hidden');
+            document.getElementById('nav').classList.add('hidden');
             document.getElementById('main-ui').innerHTML = `
                 <div class="text-center fade-in py-10">
                     <div class="text-6xl mb-8">✅</div>
-                    <h2 class="text-2xl font-black mb-2">您已完成填寫</h2>
-                    <p class="text-gray-400 mb-10 text-sm px-4">謝謝您的協助，您的意見已安全存入雲端。</p>
-                    <button onclick="handleAdmin()" class="w-full bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg">後台統計</button>
-                    <button onclick="localStorage.removeItem('done_'+window.CONFIG.SURVEY_ID);location.reload();" class="mt-8 text-[10px] text-gray-300 underline uppercase tracking-widest">清除紀錄 (重新測試)</button>
+                    <h2 class="text-2xl font-black mb-2 text-gray-800">您已完成填寫</h2>
+                    <p class="text-gray-400 mb-10 text-sm">謝謝您的協助！</p>
+                    <button onclick="enterAdmin()" class="w-full bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg active:scale-95">查看統計成果</button>
+                    <button onclick="localStorage.removeItem('done_'+window.CONFIG.SURVEY_ID);location.reload();" class="mt-8 text-[10px] text-gray-300 underline tracking-widest block mx-auto">清除紀錄 (重新測試用)</button>
                 </div>`;
         };
 
-        window.handleAdmin = () => {
+        window.enterAdmin = () => {
             const p = prompt("請輸入管理員密碼：");
             if (p !== window.CONFIG.ADMIN_PWD) return alert("密碼錯誤");
-            
-            document.getElementById('main-ui').innerHTML = `<div class="text-center py-20"><div class="loading-spin mx-auto mb-4"></div><p class="text-gray-400">正在讀取雲端統計...</p></div>`;
-            window.startAdminListener((list) => {
-                let html = `<div class="fade-in text-left"><div class="flex justify-between items-center mb-6"><div><h2 class="text-xl font-bold">雲端統計成果</h2><p class="text-[10px] text-blue-500 font-bold">共有 ${list.length} 位回覆</p></div><button onclick="downloadExcel(window.currentAdminList)" class="bg-green-500 text-white text-[10px] px-3 py-2 rounded-lg">匯出</button></div><div class="space-y-3 max-h-96 overflow-auto custom-scroll">`;
+            document.getElementById('main-ui').innerHTML = `<div class="text-center py-20"><div class="loading-spin mx-auto mb-4"></div><p class="text-gray-400 text-sm">正在從雲端抓取...</p></div>`;
+            window.fetchAdminData((list) => {
+                let html = `<div class="fade-in text-left"><div class="flex justify-between items-center mb-6"><div><h2 class="text-xl font-bold">雲端統計成果</h2><p class="text-[10px] text-blue-500 font-bold">目前共 ${list.length} 位回覆</p></div><button onclick="dlExcel(window.cachedList)" class="bg-green-500 text-white text-[10px] px-3 py-2 rounded-lg">下載</button></div><div class="space-y-3 max-h-96 overflow-auto pr-2 custom-scroll">`;
                 list.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
                 list.forEach(r => {
                     html += `<div class="p-4 bg-gray-50 rounded-2xl border border-gray-100 text-xs">
-                        <div class="flex justify-between mb-2"><span class="font-black text-blue-600 bg-white px-2 py-0.5 rounded border border-blue-50">${r.age}</span><span class="text-gray-300">${new Date(r.timestamp).toLocaleDateString()}</span></div>
-                        <p class="mb-1">熟悉度: <b>${r.exp}</b></p>
-                        <p class="text-gray-400 italic">"${r.pain}"</p>
+                        <div class="flex justify-between mb-2"><span class="font-black text-blue-600 bg-white px-2 py-0.5 rounded border border-blue-50">${r.age}</span><span class="text-gray-300 font-normal scale-90">${new Date(r.timestamp).toLocaleDateString()}</span></div>
+                        <p class="mb-1 text-gray-700"><b>${r.exp}</b></p>
+                        <div class="bg-white p-2 rounded-lg border border-gray-50 italic text-gray-400">"${r.pain || '未填寫'}"</div>
                     </div>`;
                 });
-                document.getElementById('main-ui').innerHTML = html + `</div><button onclick="location.reload()" class="mt-8 w-full py-4 text-xs text-gray-400 font-bold bg-gray-100 rounded-xl">離開後台</button></div>`;
-                window.currentAdminList = list;
+                document.getElementById('main-ui').innerHTML = html + `</div><button onclick="location.reload()" class="mt-8 w-full py-4 text-xs text-gray-400 font-bold bg-gray-100 rounded-xl hover:bg-gray-200 transition">離開後台</button></div>`;
+                window.cachedList = list;
             });
         };
 
-        window.downloadExcel = (list) => {
+        window.dlExcel = (list) => {
             let csv = "\ufeff時間,年齡,熟悉度,技能,方式,時段,痛點\n";
             list.forEach(r => csv += `${r.timestamp},${r.age},${r.exp},"${r.interests}",${r.mode},${r.time},"${r.pain}"\n`);
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "調查統計.csv"; a.click();
+            const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "調查統計成果.csv"; a.click();
         };
 
-        window.onload = () => { document.getElementById('org-text').innerText = window.CONFIG.ORG_NAME; };
+        window.handleAdminMode = () => { window.enterAdmin(); };
+        window.onload = () => { document.getElementById('org-display').innerText = window.CONFIG.ORG_NAME; };
     </script>
 </body>
 </html>
