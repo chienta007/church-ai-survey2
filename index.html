@@ -5,87 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>數位時代新服事：教會 AI 系列課程需求調查</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // ==========================================
-        // --- 1. 管理員基本設定區 ---
-        // ==========================================
-        const ORG_NAME = "我的教會";      // 顯示在網頁上的名稱
-        const ADMIN_CODE = "2024";       // 管理員查看數據的密碼
-        const SURVEY_ID = "church-001";  // 數據識別碼
-        // ==========================================
-
-        // 將設定掛載到 window 確保全域可用
-        window.ORG_NAME = ORG_NAME;
-        window.ADMIN_CODE = ADMIN_CODE;
-        window.SURVEY_ID = SURVEY_ID;
-
-        // 初始化 Firebase
-        const firebaseConfig = JSON.parse(__firebase_config);
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'church-ai-app';
-
-        window.db = db;
-        window.auth = auth;
-        window.appId = appId;
-
-        // 立即更新介面上的組織名稱，避免顯示 undefined
-        document.addEventListener('DOMContentLoaded', () => {
-            const el = document.getElementById('display-org');
-            if (el) el.innerText = window.ORG_NAME;
-        });
-
-        const initAuth = async () => {
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                await signInWithCustomToken(auth, __initial_auth_token);
-            } else {
-                await signInAnonymously(auth);
-            }
-        };
-        initAuth();
-
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                window.currentUser = user;
-                checkSubmissionStatus(user.uid);
-            }
-        });
-
-        async function checkSubmissionStatus(uid) {
-            const localSubmitted = localStorage.getItem('submitted_' + SURVEY_ID);
-            const docRef = doc(db, 'artifacts', appId, 'public', 'data', SURVEY_ID, uid);
-            const docSnap = await getDoc(docRef);
-            
-            if (localSubmitted === 'true' || docSnap.exists()) {
-                window.showAlreadySubmitted();
-            }
-        }
-
-        window.submitData = async (data) => {
-            if (!window.currentUser) return;
-            const uid = window.currentUser.uid;
-            const docRef = doc(db, 'artifacts', appId, 'public', 'data', SURVEY_ID, uid);
-            await setDoc(docRef, { 
-                ...data, 
-                organization: window.ORG_NAME, 
-                timestamp: new Date().toISOString() 
-            });
-            localStorage.setItem('submitted_' + SURVEY_ID, 'true');
-        };
-
-        window.listenToData = (callback) => {
-            const colRef = collection(db, 'artifacts', appId, 'public', 'data', SURVEY_ID);
-            return onSnapshot(colRef, (snapshot) => {
-                const data = snapshot.docs.map(doc => doc.data());
-                callback(data);
-            }, (error) => console.error("監聽失敗:", error));
-        };
-    </script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
         body { font-family: 'Noto Sans TC', sans-serif; background-color: #f8fafc; -webkit-tap-highlight-color: transparent; }
@@ -93,94 +12,86 @@
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .btn-option { transition: all 0.2s; border: 1px solid #e2e8f0; cursor: pointer; user-select: none; }
         .btn-selected { background-color: #2563eb !important; color: white !important; border-color: #1d4ed8; }
-        .spinner { border: 3px solid rgba(0,0,0,0.1); border-left-color: #2563eb; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
 
-    <div id="survey-container" class="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-8 fade-in overflow-hidden relative">
+    <!-- 配置區域：您可以直接在這裡修改名稱和密碼 -->
+    <script>
+        const CONFIG = {
+            ORG_NAME: "我的教會",   // <--- 修改您的教會名稱
+            ADMIN_PWD: "2024",     // <--- 修改您的後台密碼
+            SURVEY_ID: "ai-survey-v1"
+        };
+    </script>
+
+    <div id="survey-container" class="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-8 fade-in overflow-hidden relative border border-gray-100">
+        
         <!-- 進度條 -->
         <div id="progress-bar-container" class="hidden mb-6">
-            <div class="flex justify-between text-[10px] text-gray-400 mb-1 uppercase tracking-widest font-bold">
+            <div class="flex justify-between text-[10px] text-gray-400 mb-1 uppercase font-bold">
                 <span id="progress-text">STEP 0/6</span>
-                <span id="step-name">調查進行中</span>
+                <span>需求調查</span>
             </div>
             <div class="w-full bg-gray-100 rounded-full h-1">
                 <div id="progress-bar" class="bg-blue-600 h-1 rounded-full transition-all duration-500" style="width: 0%"></div>
             </div>
         </div>
 
-        <!-- 內容區 -->
         <div id="content">
-            <div class="text-center">
+            <!-- 初始畫面 -->
+            <div class="text-center py-4">
                 <div class="inline-block p-4 bg-blue-50 rounded-full mb-6 text-3xl">⛪</div>
                 <h1 class="text-xl font-bold text-gray-800 mb-1">數位時代新服事</h1>
                 <h2 class="text-2xl font-black text-blue-600 mb-4">AI 系列課程需求調查</h2>
-                <p class="text-gray-500 mb-8 text-sm leading-relaxed">平安！本問卷由 <span class="font-bold text-gray-700" id="display-org">載入中...</span> 發起。</p>
+                <p class="text-gray-500 mb-8 text-sm leading-relaxed">平安！本問卷由 <span class="font-bold text-blue-600" id="display-org">教會</span> 發起。<br>每人限填一份，約需 30 秒。</p>
                 
                 <div class="space-y-3 mb-8">
-                    <div class="flex items-center gap-3 p-4 bg-gray-50 rounded-2xl border border-gray-100 text-left">
+                    <div class="flex items-center gap-3 p-4 bg-gray-50 rounded-2xl text-left border border-gray-100">
                         <span class="text-blue-500">🕒</span>
-                        <p class="text-xs text-gray-600">每堂課程長度預計為 <strong>2 小時</strong></p>
+                        <p class="text-xs text-gray-600">每堂課程時間預計為 <strong>2 小時</strong></p>
                     </div>
                 </div>
 
-                <button id="start-btn" onclick="startSurvey()" class="w-full bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold py-4 px-6 rounded-2xl shadow-lg transition duration-200">
-                    開始填寫 (約 30 秒)
+                <button onclick="startSurvey()" class="w-full bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold py-4 rounded-2xl shadow-lg transition duration-200">
+                    開始填寫
                 </button>
 
-                <div class="mt-12 flex justify-center gap-4">
-                    <button onclick="openAdmin()" class="text-[10px] text-gray-300 hover:text-gray-500 underline uppercase tracking-widest">後台統計</button>
+                <div class="mt-12">
+                    <button onclick="openAdmin()" class="text-[10px] text-gray-300 hover:text-blue-500 underline uppercase tracking-widest">後台數據管理</button>
                 </div>
             </div>
         </div>
 
         <!-- 導覽按鈕 -->
         <div id="nav-buttons" class="hidden mt-8 flex justify-between gap-3">
-            <button id="prev-btn" onclick="prevStep()" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-500 font-medium py-3 rounded-xl transition">上一步</button>
-            <button id="next-btn" onclick="nextStep()" class="flex-[2] bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl shadow-md transition">下一步</button>
+            <button id="prev-btn" onclick="prevStep()" class="flex-1 bg-gray-50 text-gray-500 font-medium py-3 rounded-xl">上一步</button>
+            <button id="next-btn" onclick="nextStep()" class="flex-[2] bg-blue-600 text-white font-bold py-3 rounded-xl shadow-md">下一步</button>
         </div>
     </div>
 
     <script>
+        // 初始化組織名稱
+        document.getElementById('display-org').innerText = CONFIG.ORG_NAME;
+
         let currentStep = 0;
-        const surveyData = { age: '', experience: '', interests: [], painPoint: '', mode: '', preferredTime: '' };
+        let surveyData = { age: '', experience: '', interests: [], painPoint: '', mode: '', preferredTime: '' };
 
         const steps = [
             { id: 'age', title: '您的年齡層？', type: 'single', options: ['青年 (12-18歲)', '社青 (19-35歲)', '壯年 (36-55歲)', '樂齡 (56歲以上)'] },
-            { id: 'experience', title: 'AI 科技熟悉度？', type: 'single', options: ['小白 (完全沒用過)', '初級 (聽過/偶爾用)', '中級 (常用於生活)', '進階 (能精確下指令)'] },
-            { id: 'interests', title: '想學哪些 AI 技能？', subtitle: '可複選', type: 'multi', options: ['生活幫手 (翻譯/郵件/安排)', '服事同工 (週報/講章摘要)', '視覺創意 (設計/插圖/影片)', '學生學習 (筆記/報告輔助)', '進階技能 (自動化/數據)'] },
+            { id: 'experience', title: 'AI 科技熟悉度？', type: 'single', options: ['小白', '初級', '中級', '進階'] },
+            { id: 'interests', title: '想學哪些 AI 技能？', type: 'multi', options: ['生活幫手', '服事同工', '視覺創意', '學生學習', '進階技能'] },
             { id: 'painPoint', title: '最想解決的一個難點？', type: 'text', placeholder: '例如：製作週報太慢...' },
             { id: 'mode', title: '偏好的授課方式？', type: 'single', options: ['實體課程', '線上課程', '雙軌並行'] },
             { id: 'preferredTime', title: '最方便的時段？', type: 'single', options: ['平日晚上', '週六下午', '主日午後'] }
         ];
 
-        window.showAlreadySubmitted = () => {
-            const content = document.getElementById('content');
-            content.innerHTML = `
-                <div class="text-center fade-in py-8">
-                    <div class="text-5xl mb-6">✅</div>
-                    <h2 class="text-xl font-bold text-gray-800 mb-2">您已完成填寫</h2>
-                    <p class="text-sm text-gray-400 mb-10">您的意見已存入雲端，謝謝！</p>
-                    
-                    <div class="space-y-4">
-                        <button onclick="openAdmin()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl shadow-lg active:scale-95 transition">進入後台統計</button>
-                        <button onclick="resetMyRecord()" class="text-[10px] text-gray-300 hover:text-blue-500 underline uppercase tracking-widest mt-4">清除本機紀錄 (測試用)</button>
-                    </div>
-                </div>`;
-            document.getElementById('nav-buttons').classList.add('hidden');
-        };
-
-        window.resetMyRecord = () => {
-            if(confirm("確定要清除本機填寫紀錄並重新測試嗎？\n(這不會刪除已上傳到雲端的數據)")) {
-                localStorage.removeItem('submitted_' + window.SURVEY_ID);
-                location.reload();
-            }
-        };
+        // 檢查是否填過
+        if (localStorage.getItem('submitted_' + CONFIG.SURVEY_ID)) {
+            setTimeout(showAlreadySubmitted, 100);
+        }
 
         function startSurvey() {
-            if (!window.currentUser) { setTimeout(startSurvey, 500); return; }
             currentStep = 1;
             document.getElementById('progress-bar-container').classList.remove('hidden');
             renderStep();
@@ -193,7 +104,7 @@
             document.getElementById('progress-bar').style.width = `${(currentStep / steps.length) * 100}%`;
             document.getElementById('progress-text').innerText = `STEP ${currentStep}/${steps.length}`;
 
-            let html = `<div class="fade-in"><h2 class="text-xl font-bold text-gray-800 mb-4">${step.title}</h2>`;
+            let html = `<div class="fade-in"><h2 class="text-xl font-bold text-gray-800 mb-6">${step.title}</h2>`;
             if (step.type === 'single') {
                 html += `<div class="grid gap-3">`;
                 step.options.forEach(opt => {
@@ -214,7 +125,7 @@
             html += `</div>`;
             content.innerHTML = html;
             document.getElementById('prev-btn').style.visibility = currentStep === 1 ? 'hidden' : 'visible';
-            document.getElementById('next-btn').innerText = currentStep === steps.length ? '確認送出' : '下一步';
+            document.getElementById('next-btn').innerText = currentStep === steps.length ? '完成送出' : '下一步';
         }
 
         function selectSingle(k, v) { 
@@ -232,62 +143,124 @@
 
         function nextStep() {
             const s = steps[currentStep - 1];
-            if ((s.type === 'single' && !surveyData[s.id]) || (s.type === 'multi' && surveyData.interests.length === 0) || (s.type === 'text' && !surveyData.painPoint.trim())) return alert('請先完成目前的選項喔！');
+            if ((s.type === 'single' && !surveyData[s.id]) || (s.type === 'multi' && surveyData.interests.length === 0) || (s.type === 'text' && !surveyData.painPoint.trim())) return alert('請先填寫內容');
             if (currentStep < steps.length) { currentStep++; renderStep(); } 
-            else { submitFinal(); }
+            else { finishSurvey(); }
         }
 
         function prevStep() { if (currentStep > 1) { currentStep--; renderStep(); } }
 
-        async function submitFinal() {
+        function finishSurvey() {
+            localStorage.setItem('submitted_' + CONFIG.SURVEY_ID, 'true');
+            const csvRow = `${new Date().toLocaleDateString()},${surveyData.age},${surveyData.experience},"${surveyData.interests.join(';')}",${surveyData.mode},"${surveyData.painPoint.replace(/\n/g, ' ')}"`;
+            
             const content = document.getElementById('content');
             document.getElementById('nav-buttons').classList.add('hidden');
-            content.innerHTML = `<div class="text-center py-12"><div class="spinner mx-auto mb-4"></div><p class="text-gray-400 text-sm">正在同步至雲端...</p></div>`;
-            try {
-                await window.submitData(surveyData);
-                content.innerHTML = `<div class="text-center fade-in py-8"><div class="text-5xl mb-6">🙌</div><h2 class="text-2xl font-bold text-gray-800 mb-2">提交完成！</h2><p class="text-gray-500 mb-8 text-sm text-center px-4">您的聲音已成功傳送到雲端。<br>願神祝福您的服事！</p><button onclick="openAdmin()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl mb-4 shadow-lg active:scale-95 transition">進入後台統計</button></div>`;
-                document.getElementById('progress-bar-container').classList.add('hidden');
-            } catch (e) { alert("送出失敗"); renderStep(); }
+            document.getElementById('progress-bar-container').classList.add('hidden');
+            
+            content.innerHTML = `
+                <div class="text-center fade-in py-8">
+                    <div class="text-5xl mb-6">🙌</div>
+                    <h2 class="text-2xl font-bold text-gray-800 mb-2">提交完成！</h2>
+                    <p class="text-gray-500 mb-8 text-sm">請複製下方代碼回傳至 LINE 給同工：</p>
+                    <div class="bg-blue-50 p-4 rounded-2xl border border-blue-100 mb-10">
+                        <code id="final-code" class="text-[10px] break-all text-blue-600 font-mono select-all">${csvRow}</code>
+                    </div>
+                    <button onclick="copyToClipboard()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl mb-4">一鍵複製代碼</button>
+                    <button onclick="openAdmin()" class="text-xs text-gray-300 underline">管理員後台</button>
+                </div>`;
         }
 
-        window.openAdmin = () => {
+        function copyToClipboard() {
+            const code = document.getElementById('final-code').innerText;
+            const el = document.createElement('textarea');
+            el.value = code;
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
+            document.body.removeChild(el);
+            alert("代碼已複製！請貼到 LINE 群組。");
+        }
+
+        function showAlreadySubmitted() {
+            const content = document.getElementById('content');
+            content.innerHTML = `
+                <div class="text-center fade-in py-8">
+                    <div class="text-5xl mb-6">✅</div>
+                    <h2 class="text-xl font-bold text-gray-800 mb-2">您已完成填寫</h2>
+                    <p class="text-sm text-gray-400 mb-10">願神祝福您的服事！</p>
+                    <div class="space-y-4">
+                        <button onclick="openAdmin()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl">進入管理後台</button>
+                        <button onclick="resetTest()" class="text-[10px] text-gray-300 underline">清除紀錄 (重新測試)</button>
+                    </div>
+                </div>`;
+            document.getElementById('nav-buttons').classList.add('hidden');
+        }
+
+        function resetTest() {
+            if(confirm("確定要重新測試嗎？")) {
+                localStorage.removeItem('submitted_' + CONFIG.SURVEY_ID);
+                location.reload();
+            }
+        }
+
+        // --- 管理員功能 ---
+        function openAdmin() {
             const pwd = prompt("請輸入管理員密碼：");
-            // 確保與設定區的密碼一致
-            if (pwd !== window.ADMIN_CODE) return alert("密碼錯誤，請檢查設定區的 ADMIN_CODE。");
+            if (pwd !== CONFIG.ADMIN_PWD) return alert("密碼錯誤！預設為 2024");
             
             const content = document.getElementById('content');
-            content.innerHTML = `<div class="text-center py-12"><div class="spinner mx-auto mb-4"></div><p class="text-gray-400 text-sm">正在載入雲端統計...</p></div>`;
-            
-            window.listenToData((rows) => {
-                let html = `
-                    <div class="fade-in">
-                        <div class="flex justify-between items-center mb-6">
-                            <h2 class="text-xl font-bold text-gray-800">雲端統計報告</h2>
-                            <span class="bg-blue-100 text-blue-600 text-[10px] px-2 py-1 rounded-full font-bold">${rows.length} 份回覆</span>
+            content.innerHTML = `
+                <div class="fade-in">
+                    <h2 class="text-lg font-bold text-gray-800 mb-4">數據管理中心</h2>
+                    <p class="text-xs text-gray-400 mb-4">請將大家傳給您的 LINE 代碼全部貼入下方：</p>
+                    <textarea id="import-area" class="w-full h-40 p-4 bg-gray-50 border rounded-2xl text-[10px] focus:ring-2 focus:ring-blue-100 outline-none" placeholder="貼入多行代碼..."></textarea>
+                    
+                    <button onclick="processImport()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-2xl mt-4 mb-8">產生統計圖表</button>
+                    
+                    <div id="stats-result" class="space-y-6 hidden">
+                        <div class="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                            <h3 class="text-xs font-bold text-gray-400 mb-2 uppercase tracking-widest">填寫總數</h3>
+                            <p class="text-3xl font-black text-blue-600" id="total-count">0</p>
                         </div>
-                        <div class="space-y-3 max-h-96 overflow-auto pr-1">`;
-                
-                rows.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-                
-                rows.forEach(r => {
-                    html += `
-                        <div class="p-4 bg-gray-50 rounded-2xl border border-gray-100 text-left">
-                            <div class="flex justify-between items-start mb-2">
-                                <span class="text-[10px] font-bold text-blue-500 bg-white px-2 py-0.5 rounded border border-blue-100">${r.age}</span>
-                                <span class="text-[9px] text-gray-300">${new Date(r.timestamp).toLocaleDateString()}</span>
-                            </div>
-                            <p class="text-xs text-gray-700 font-bold mb-1">熟悉度: ${r.experience}</p>
-                            <p class="text-xs text-gray-500 mb-2">感興趣: ${Array.isArray(r.interests) ? r.interests.join(', ') : r.interests}</p>
-                            <div class="bg-white p-2 rounded-lg border border-gray-50 italic text-[10px] text-gray-400 leading-normal">" ${r.painPoint} "</div>
-                        </div>`;
-                });
-                
-                html += `</div><button onclick="location.reload()" class="mt-8 w-full bg-gray-100 py-3 rounded-2xl text-sm font-medium text-gray-500 hover:bg-gray-200 transition">返回首頁</button></div>`;
-                content.innerHTML = html;
-                document.getElementById('nav-buttons').classList.add('hidden');
-                if(document.getElementById('progress-bar-container')) document.getElementById('progress-bar-container').classList.add('hidden');
-            });
+                        <div id="age-dist" class="space-y-2"></div>
+                    </div>
+
+                    <button onclick="location.reload()" class="w-full bg-gray-100 py-3 rounded-2xl text-sm mt-10">返回首頁</button>
+                </div>
+            `;
+            document.getElementById('nav-buttons').classList.add('hidden');
+            if(document.getElementById('progress-bar-container')) document.getElementById('progress-bar-container').classList.add('hidden');
         }
+
+        window.processImport = () => {
+            const raw = document.getElementById('import-area').value;
+            const lines = raw.split('\n').filter(l => l.trim().includes(','));
+            if(lines.length === 0) return alert("請貼入有效的代碼內容");
+
+            document.getElementById('stats-result').classList.remove('hidden');
+            document.getElementById('total-count').innerText = lines.length;
+
+            // 簡單年齡統計示範
+            let ageCounts = {};
+            lines.forEach(l => {
+                const age = l.split(',')[1];
+                if(age) ageCounts[age] = (ageCounts[age] || 0) + 1;
+            });
+
+            let ageHtml = `<h3 class="text-xs font-bold text-gray-400 mb-3 uppercase tracking-widest">年齡分佈</h3>`;
+            for(let key in ageCounts) {
+                const percent = (ageCounts[key] / lines.length * 100).toFixed(0);
+                ageHtml += `
+                    <div class="text-xs">
+                        <div class="flex justify-between mb-1"><span>${key}</span><span>${ageCounts[key]} 人 (${percent}%)</span></div>
+                        <div class="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
+                            <div class="bg-blue-500 h-full" style="width: ${percent}%"></div>
+                        </div>
+                    </div>`;
+            }
+            document.getElementById('age-dist').innerHTML = ageHtml;
+        };
     </script>
 </body>
 </html>
