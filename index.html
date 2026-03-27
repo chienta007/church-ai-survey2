@@ -3,186 +3,222 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>數位時代新服事：教會 AI 系列課程需求調查</title>
+    <title>約書亞管理學院 - 教會 AI 數位先鋒實戰營</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <script>
-        window.CONFIG = {
-            ORG_NAME: "主耶穌愛您教會3", 
-            ADMIN_PWD: "2024",        
-            SURVEY_ID: "church_ai_prod_v1", 
-            FIREBASE_SETTING: {
-                apiKey: "AIzaSyDapTicgqPQG-c-5lCFD0qs_IfhYU93xPU",
-                authDomain: "church-ai-survey2.firebaseapp.com",
-                projectId: "church-ai-survey2",
-                storageBucket: "church-ai-survey2.firebasestorage.app",
-                messagingSenderId: "424950586352",
-                appId: "1:424950586352:web:7f25763deb5bc8fa39b35"
-            }
-        };
-    </script>
-
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
-        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f8fafc; color: #1e293b; -webkit-tap-highlight-color: transparent; }
-        .fade-in { animation: fadeIn 0.4s ease-out forwards; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .opt-btn { transition: all 0.2s; border: 1px solid #e2e8f0; cursor: pointer; user-select: none; }
-        .opt-sel { background-color: #2563eb !important; color: white !important; border-color: #1d4ed8; transform: scale(0.98); }
-        .spin { border: 3px solid rgba(0,0,0,0.05); border-left-color: #2563eb; border-radius: 50%; width: 28px; height: 28px; animation: rotating 1s linear infinite; }
-        @keyframes rotating { to { transform: rotate(360deg); } }
-        .scroll::-webkit-scrollbar { width: 4px; }
-        .scroll::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f5f5f7; color: #1d1d1f; scroll-behavior: smooth; }
+        .apple-blur { backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); background-color: rgba(255, 255, 255, 0.8); }
+        .option-card { border: 2px solid #d2d2d7; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer; }
+        .option-card:hover { border-color: #86868b; }
+        .option-card.active { border-color: #0071e3; background-color: #fbfbfd; }
+        .btn-primary { background-color: #0071e3; color: white; transition: all 0.2s; }
+        .btn-primary:hover { background-color: #0077ed; transform: scale(1.01); }
+        .btn-disabled { background-color: #d2d2d7; cursor: not-allowed; }
+        input, select, textarea { border: 1px solid #d2d2d7; transition: border-color 0.2s; }
+        input:focus, select:focus, textarea:focus { outline: none; border-color: #0071e3; ring: 2px; ring-color: #0071e3; }
+        .form-section-title { color: #86868b; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; border-bottom: 1px solid #f2f2f2; padding-bottom: 0.5rem; }
+        .step-circle { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+        .bank-info-box { background: linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%); border: 1px solid #e0e7ff; box-shadow: 0 4px 12px rgba(0, 113, 227, 0.05); }
     </style>
 </head>
-<body class="min-h-screen flex items-center justify-center p-4">
+<body>
 
-    <div id="survey-card" class="bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full p-10 fade-in border border-white">
-        <div id="header-ui" class="text-center mb-10">
-            <div class="inline-block p-6 bg-blue-50 rounded-[2rem] mb-6 text-4xl shadow-inner shadow-blue-100/50">⛪</div>
-            <h1 class="text-xl font-bold text-gray-800 tracking-tight">數位時代新服事</h1>
-            <h2 class="text-2xl font-black text-blue-600 mb-2 leading-tight">AI 系列課程需求調查</h2>
-            <p class="text-xs text-gray-400 font-medium text-center">本問卷由 <span class="org-name-label font-bold text-gray-700">載入中</span> 發起</p>
+    <!-- 頂部導航 -->
+    <nav class="sticky top-0 z-50 apple-blur border-b border-gray-100 px-6 py-3 flex justify-between items-center">
+        <div class="flex items-center space-x-2"><span class="font-semibold text-lg tracking-tight">約書亞管理學院</span></div>
+        <div class="hidden md:flex space-x-8 text-xs font-medium text-gray-500">
+            <a href="#overview" class="hover:text-black">課程介紹</a>
+            <a href="#selection" class="hover:text-black">選擇方案</a>
+            <a href="#form" class="hover:text-black">報名表單</a>
         </div>
+    </nav>
 
-        <div id="main-content">
-            <div class="text-center">
-                <p class="text-gray-500 mb-12 text-sm leading-relaxed px-4 font-medium">平安！邀請您分享真實想法，協助我們規劃更適合弟兄姊妹的 AI 課程。</p>
-                <button onclick="startSurvey()" class="w-full bg-blue-600 text-white font-black py-5 rounded-2xl shadow-xl hover:brightness-110 active:scale-95 transition">
-                    立即開始填寫 (約 30 秒)
-                </button>
+    <!-- 醒目公告欄 -->
+    <div class="bg-blue-600 text-white text-center py-3 text-sm font-medium shadow-md">
+        📢 即日起受理報名，滿 <span class="font-bold underline">15</span> 人即開課，開課日期將透過 <span class="font-bold underline">LINE</span> 另行通知。
+    </div>
+
+    <main class="max-w-7xl mx-auto px-6 py-12 lg:flex lg:space-x-16">
+        <!-- 左側：說明與流程 -->
+        <div class="lg:w-1/2 lg:sticky lg:top-24 h-fit mb-16 lg:mb-0">
+            <div class="rounded-3xl bg-white p-10 shadow-sm border border-gray-100">
+                <div class="flex items-center space-x-3 mb-4">
+                    <span class="text-blue-600 font-bold text-xs tracking-widest uppercase">新世代教會裝備</span>
+                    <span class="bg-gray-100 text-gray-800 px-3 py-1 rounded-full text-[10px] font-bold">滿 15 人開課</span>
+                </div>
+                <h1 class="text-4xl lg:text-5xl font-semibold mb-6 leading-tight">教會 AI <br>數位先鋒實戰營</h1>
+                
+                <div class="space-y-6 text-gray-500 text-lg leading-relaxed mb-8">
+                    <p>這不只是一門課程，而是教會數位轉型的起點。我們將帶領您掌握 AI 指令，讓事工更聰明、更有效率。</p>
+                    <div class="p-4 bg-blue-50 rounded-2xl border border-blue-100">
+                        <p class="text-blue-800 text-sm font-medium">✨ 全勤優惠激勵：</p>
+                        <p class="text-blue-700 text-xs">實體班退 $2,000 / 線上班退 $500 (全勤完課後退費)</p>
+                    </div>
+                </div>
+
+                <!-- 報名程序 -->
+                <div class="p-6 bg-gray-50 rounded-3xl border border-gray-100">
+                    <h3 class="text-sm font-bold text-gray-900 mb-6 flex items-center">📋 完全報名程序</h3>
+                    <div class="space-y-6 text-sm">
+                        <div class="flex items-start"><div class="step-circle bg-black text-white mr-4">1</div><div><p class="font-semibold">選擇方案</p><p class="text-xs text-gray-400">實體班 (NT$ 12k) / 線上班 (NT$ 10k)</p></div></div>
+                        <div class="flex items-start"><div class="step-circle bg-black text-white mr-4">2</div><div><p class="font-semibold">匯款並填單</p><p class="text-xs text-gray-400">完成匯款後填寫帳號末 5 碼</p><p class="text-[10px] text-blue-600 font-medium mt-1">台銀 (004) 信安分行 2400-0101-2927</p></div></div>
+                        <div class="flex items-start"><div class="step-circle bg-black text-white mr-4">3</div><div><p class="font-semibold">等待 LINE 通知</p><p class="text-xs text-gray-400">滿 15 人後專人通知正式開課</p></div></div>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <div id="nav-ui" class="hidden mt-8 flex gap-3">
-            <button id="btn-back" onclick="prevStep()" class="flex-1 bg-gray-50 text-gray-400 font-bold py-4 rounded-2xl active:scale-95 transition text-sm">上一步</button>
-            <button id="btn-next" onclick="nextStep()" class="flex-[2] bg-blue-600 text-white font-black py-4 rounded-2xl shadow-lg active:scale-95 transition text-sm">下一步</button>
+        <!-- 右側：報名表單 -->
+        <div class="lg:w-1/2 space-y-16">
+            <section id="selection">
+                <h2 class="text-2xl font-semibold mb-6">選擇參與方式</h2>
+                <div class="space-y-4">
+                    <div id="opt-physical" class="option-card active rounded-2xl p-6 flex justify-between items-center" onclick="updatePrice(12000, 'physical')">
+                        <div class="space-y-1"><div class="font-semibold text-xl">實體課程</div><div class="text-xs text-blue-600 font-medium">週四晚 7-9 PM | 中山北路二段</div></div>
+                        <div class="font-semibold text-lg text-right">NT$ 12,000</div>
+                    </div>
+                    <div id="opt-online" class="option-card rounded-2xl p-6 flex justify-between items-center" onclick="updatePrice(10000, 'online')">
+                        <div class="space-y-1"><div class="font-semibold text-xl">線上課程</div><div class="text-xs text-blue-600 font-medium">週五晚 7-9 PM | ZOOM 授課</div></div>
+                        <div class="font-semibold text-lg text-right">NT$ 10,000</div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="form" class="bg-white rounded-3xl p-10 shadow-sm border border-gray-100">
+                <form id="joshuaForm" class="space-y-8">
+                    <div class="space-y-4">
+                        <h3 class="form-section-title">基本資訊</h3>
+                        <div class="grid grid-cols-2 gap-4">
+                            <input name="userName" required placeholder="姓名 *" class="p-3 bg-gray-50 rounded-xl">
+                            <select name="userGender" required class="p-3 bg-gray-50 rounded-xl"><option value="">性別 *</option><option>男</option><option>女</option></select>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <input name="userPhone" type="tel" required placeholder="手機號碼 *" class="p-3 bg-gray-50 rounded-xl">
+                            <input name="userLineId" required placeholder="LINE ID *" class="p-3 bg-gray-50 rounded-xl">
+                        </div>
+                    </div>
+
+                    <div class="space-y-4">
+                        <h3 class="form-section-title">事工背景</h3>
+                        <select name="userAgeRange" required class="w-full p-3 bg-gray-50 rounded-xl">
+                            <option value="">年齡層 *</option><option>20歲以下</option><option>20~35歲</option><option>36~50歲</option><option>51~65歲</option><option>65歲以上</option>
+                        </select>
+                        <input name="userJobTitle" required placeholder="職稱 *" class="w-full p-3 bg-gray-50 rounded-xl">
+                        <input name="userChurch" required placeholder="所屬教會 (無則填無) *" class="w-full p-3 bg-gray-50 rounded-xl">
+                        <input name="userEmail" type="email" required placeholder="Email *" class="w-full p-3 bg-gray-50 rounded-xl">
+                        <input name="userReferrer" required placeholder="推薦人 (無則填無) *" class="w-full p-3 bg-gray-50 rounded-xl">
+                    </div>
+
+                    <div class="space-y-4">
+                        <h3 class="form-section-title">繳費核對 (請先匯款)</h3>
+                        <div class="p-6 bank-info-box rounded-2xl">
+                            <p class="text-[10px] text-gray-500 mb-2 font-semibold text-center">臺灣銀行 (004) 信安分行</p>
+                            <p class="text-blue-600 font-bold text-2xl mb-1 text-center tracking-wider">2400 0101 2927</p>
+                            <p class="text-xs text-gray-700 font-medium text-center">戶名：博斯創新股份有限公司</p>
+                            <input name="bankLast5" required maxlength="5" placeholder="填寫您的匯款帳號末 5 碼 *" class="w-full mt-4 p-3 bg-white rounded-xl border-blue-200 text-center text-lg font-bold">
+                        </div>
+                    </div>
+
+                    <div class="space-y-4">
+                        <h3 class="form-section-title">後續作業與留言</h3>
+                        <div class="p-4 bg-blue-50/50 rounded-xl border border-blue-100 grid grid-cols-2 gap-2">
+                            <input name="refundBank" required placeholder="退費銀行/代碼 *" class="p-2 bg-white rounded-lg text-xs">
+                            <input name="refundAccount" required placeholder="退費帳號 *" class="p-2 bg-white rounded-lg text-xs">
+                        </div>
+                        <textarea name="groupNote" rows="2" placeholder="如有意組班報名，需另調整時間請留言" class="w-full p-3 bg-gray-50 rounded-xl text-sm"></textarea>
+                        <textarea name="generalNote" rows="2" placeholder="備註" class="w-full p-3 bg-gray-50 rounded-xl text-sm"></textarea>
+                    </div>
+
+                    <button id="submitBtn" type="submit" class="w-full py-5 rounded-2xl font-semibold btn-primary text-lg shadow-xl shadow-blue-100">確認報名並送出資料</button>
+                </form>
+            </section>
         </div>
+    </main>
+
+    <div class="fixed bottom-0 w-full apple-blur border-t border-gray-100 p-6 md:px-12 flex justify-between items-center z-50">
+        <div><p class="text-xs text-gray-400">目前選擇方案</p><p class="text-xl font-semibold"><span id="display-type">實體課程</span> <span class="text-blue-600" id="display-price">NT$ 12,000</span></p></div>
+        <button onclick="scrollToForm()" class="px-10 py-3 btn-primary rounded-full font-semibold shadow-lg shadow-blue-200">立即報名</button>
     </div>
 
-    <script>
-        let step = 0;
-        const answers = { age: '', exp: '', interests: [], pain: '', mode: '', time: '' };
-        const questions = [
-            { k: 'age', t: '您的年齡層？', type: 's', opts: ['青年 (12-18歲)', '社青 (19-35歲)', '壯年 (36-55歲)', '樂齡 (56歲以上)'] },
-            { k: 'exp', t: 'AI 科技熟悉度？', type: 's', opts: ['小白 (完全沒用過)', '初級 (聽過/偶爾用)', '中級 (常用於生活)', '進階 (指令專家)'] },
-            { k: 'interests', t: '想學哪些 AI 技能？', type: 'm', opts: ['生活幫手', '服事同工', '視覺創意', '學生學習', '進階自動化'] },
-            { k: 'pain', t: '最想解決的一個難點？', type: 't', holder: '例如：製作週報太慢、想做精美海報...' },
-            { k: 'mode', t: '偏好的授課方式？', type: 's', opts: ['實體課程', '線上課程', '雙軌並行'] },
-            { k: 'time', t: '最方便的時段？', type: 's', opts: ['平日晚上', '週六下午', '主日午後'] }
-        ];
-
-        document.addEventListener("DOMContentLoaded", () => {
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.has('admin')) { window.renderAdminLogin(); return; }
-            document.querySelectorAll('.org-name-label').forEach(el => el.innerText = window.CONFIG.ORG_NAME);
-            if (localStorage.getItem('submitted_' + window.CONFIG.SURVEY_ID) === 'true') { window.showDoneUI(); }
-        });
-
-        function startSurvey() { step = 1; render(); }
-        function render() {
-            const q = questions[step-1];
-            const main = document.getElementById('main-content');
-            document.getElementById('nav-ui').classList.remove('hidden');
-            let html = `<div class="fade-in"><p class="text-[10px] text-blue-500 font-black mb-3 uppercase tracking-widest">Question ${step}/6</p><h2 class="text-xl font-bold mb-8 text-gray-800">${q.t}</h2>`;
-            if(q.type === 's') {
-                html += `<div class="grid gap-3">`;
-                q.opts.forEach(o => html += `<button onclick="setS('${q.k}','${o}')" class="opt-btn w-full text-left p-4 rounded-2xl bg-gray-50 text-sm font-medium ${answers[q.k]===o?'opt-sel':''}">${o}</button>`);
-                html += `</div>`;
-            } else if(q.type === 'm') {
-                html += `<div class="grid gap-3">`;
-                q.opts.forEach(o => {
-                    const sel = answers.interests.includes(o);
-                    html += `<button onclick="toggleM('${o}')" class="opt-btn w-full text-left p-4 rounded-2xl bg-gray-50 text-sm font-medium ${sel?'opt-sel':''}"><div class="flex justify-between items-center"><span>${o}</span><span>${sel?'✓':''}</span></div></button>`;
-                });
-                html += `</div>`;
-            } else {
-                html += `<textarea oninput="answers.pain=this.value" class="w-full p-5 bg-gray-50 border-0 rounded-2xl h-44 outline-none focus:ring-2 focus:ring-blue-100 text-sm font-medium" placeholder="${q.holder}">${answers.pain}</textarea>`;
-            }
-            main.innerHTML = html + `</div>`;
-            document.getElementById('btn-back').style.visibility = step === 1 ? 'hidden' : 'visible';
-            document.getElementById('btn-next').innerText = step === 6 ? '完成提交' : '下一步';
-        }
-
-        window.setS = (k, v) => { answers[k] = v; render(); if(step < 6) setTimeout(nextStep, 300); };
-        window.toggleM = (v) => { const i = answers.interests.indexOf(v); if(i > -1) answers.interests.splice(i, 1); else answers.interests.push(v); render(); };
-        window.nextStep = () => {
-            const q = questions[step-1];
-            if((q.type==='s'&&!answers[q.k]) || (q.type==='m'&&answers.interests.length===0) || (q.type==='t'&&!answers.pain.trim())) return alert("請完成本題內容喔！");
-            if(step < 6) { step++; render(); } else { window.triggerSubmit(answers); }
-        };
-        window.prevStep = () => { if(step > 1) { step--; render(); } };
-
-        window.showDoneUI = (userData = null) => {
-            document.getElementById('nav-ui').style.display = 'none';
-            let content = `<div class="text-center fade-in py-10"><div class="text-6xl mb-8">🙌</div><h2 class="text-2xl font-black mb-2 text-gray-800">哈利路亞！</h2><p class="text-gray-400 mb-10 text-sm font-medium text-center px-6 leading-relaxed font-bold">謝謝您的寶貴意見！您的想法已安全紀錄。</p><p class="text-[9px] text-gray-200 uppercase tracking-[0.4em] font-bold">Submission Secured</p></div>`;
-            document.getElementById('main-content').innerHTML = content;
-        };
-
-        window.renderAdminLogin = () => {
-            document.getElementById('header-ui').innerHTML = `<div class="inline-block p-6 bg-blue-50 rounded-[2rem] mb-6 text-4xl shadow-inner">🔐</div><h2 class="text-2xl font-black text-gray-800">管理權限驗證</h2><p class="text-xs text-gray-400 mt-2">請輸入您的管理員密碼</p>`;
-            document.getElementById('main-content').innerHTML = `<div class="space-y-4 px-4 mt-8"><input type="password" id="admin-pass" class="w-full p-4 bg-gray-50 border-0 rounded-2xl focus:ring-2 focus:ring-blue-100 outline-none text-center tracking-widest font-black" placeholder="••••"><button onclick="checkAdminPass()" class="w-full bg-blue-600 text-white font-black py-5 rounded-2xl shadow-xl active:scale-95 transition">確認進入</button></div>`;
-        };
-        window.checkAdminPass = () => { if (document.getElementById('admin-pass').value !== window.CONFIG.ADMIN_PWD) return alert("密碼錯誤"); window.openRealAdmin(); };
-
-        window.triggerSubmit = (data) => {
-            document.getElementById('main-content').innerHTML = `<div class="text-center py-20"><div class="spin mx-auto mb-4"></div><p class="text-gray-400 text-sm font-bold">安全傳送中...</p></div>`;
-            if(window.sendDataToFirebase) window.sendDataToFirebase(data);
-        };
-    </script>
-
+    <!-- Firebase 實體串接 SDK -->
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getFirestore, doc, setDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getAnalytics, logEvent } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js";
 
-        const config = window.CONFIG.FIREBASE_SETTING;
-        const app = initializeApp(config);
-        const db = getFirestore(app);
-
-        // 【關鍵改變 1】：直接存入根目錄的 survey_responses，且如果失敗會大聲報警！
-        window.sendDataToFirebase = async (data) => {
-            try {
-                // 自動產生亂數 ID 作為文件名稱
-                const newDocRef = doc(collection(db, 'survey_responses'));
-                await setDoc(newDocRef, { ...data, org: window.CONFIG.ORG_NAME, timestamp: new Date().toISOString() });
-                
-                console.log("資料成功寫入大門口！");
-                localStorage.setItem('submitted_' + window.CONFIG.SURVEY_ID, 'true');
-                window.showDoneUI(data);
-            } catch (e) {
-                // 【大聲公機制】：攔截到錯誤直接彈出視窗！
-                alert("🚨 上傳被攔截了！\n請截圖這段文字給 AI 助手：\n\n" + e.message);
-                console.error("寫入失敗:", e);
-                window.showDoneUI(data); // 還是讓使用者看到完成畫面
-            }
+        // --- Firebase 配置 (已填入 test001-f2549 資訊) ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyCu4Yv99l3z78N6O5E2G8k5m8m-Z7y99A",
+            authDomain: "test001-f2549.firebaseapp.com",
+            projectId: "test001-f2549",
+            storageBucket: "test001-f2549.firebasestorage.app",
+            messagingSenderId: "125959068007",
+            appId: "1:125959068007:web:86641838618388d1d867c4",
+            measurementId: "G-7Z0X3X7B49"
         };
 
-        // 【關鍵改變 2】：後台也是直接去大門口抓資料
-        window.openRealAdmin = () => {
-            document.getElementById('main-content').innerHTML = `<div class="text-center py-20"><div class="spin mx-auto mb-4"></div><p class="text-gray-400 text-sm font-bold">正在讀取雲端統計數據...</p></div>`;
-            
-            onSnapshot(collection(db, 'survey_responses'), (snapshot) => {
-                const list = snapshot.docs.map(d => d.data());
-                let html = `
-                    <div class="fade-in text-left">
-                        <div class="flex justify-between items-center mb-6 px-1">
-                            <div><h2 class="text-xl font-bold text-gray-800">統計成果報告</h2><p class="text-[10px] text-blue-500 font-bold uppercase tracking-widest">目前收到 ${list.length} 份回覆</p></div>
-                        </div>
-                        <div class="space-y-3 max-h-80 overflow-auto pr-2 scroll">`;
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const analytics = getAnalytics(app);
+
+        let currentPrice = 12000;
+        let currentType = '實體課程';
+
+        window.updatePrice = function(price, mode) {
+            currentPrice = price;
+            currentType = (mode === 'physical') ? '實體課程' : '線上課程';
+            document.querySelectorAll('.option-card').forEach(card => card.classList.remove('active'));
+            document.getElementById('opt-' + mode).classList.add('active');
+            document.getElementById('display-price').innerText = 'NT$ ' + price.toLocaleString();
+            document.getElementById('display-type').innerText = currentType;
+        };
+
+        window.scrollToForm = function() {
+            document.getElementById('form').scrollIntoView({ behavior: 'smooth' });
+        };
+
+        const form = document.getElementById('joshuaForm');
+        const submitBtn = document.getElementById('submitBtn');
+
+        form.onsubmit = async function(e) {
+            e.preventDefault();
+            submitBtn.disabled = true;
+            submitBtn.classList.add('btn-disabled');
+            submitBtn.innerText = '正在處理報名資料...';
+
+            const formData = new FormData(form);
+            const data = {
+                courseType: currentType,
+                amount: currentPrice,
+                timestamp: serverTimestamp()
+            };
+            formData.forEach((value, key) => data[key] = value);
+
+            try {
+                // 資料存入 Firebase
+                await addDoc(collection(db, "registrations"), data);
+                logEvent(analytics, 'registration_complete');
                 
-                if (list.length === 0) {
-                    html += `<div class="p-8 text-center text-gray-400 text-sm font-bold">目前大門口還沒有資料喔！</div>`;
-                } else {
-                    list.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
-                    list.forEach(r => {
-                        html += `<div class="p-4 bg-gray-50 rounded-2xl border border-gray-100 text-xs shadow-sm"><div class="flex justify-between mb-2 font-bold"><span class="text-blue-600 bg-white px-2 py-0.5 rounded border border-blue-50">${r.age}</span><span class="text-gray-300 font-normal scale-90">${new Date(r.timestamp).toLocaleDateString()}</span></div><p class="text-gray-700 mb-1 font-bold">熟悉度：${r.exp || ''}</p><p class="text-gray-400 italic">"${r.pain || '未填寫'}"</p></div>`;
-                    });
-                }
-                
-                document.getElementById('main-content').innerHTML = html + `</div><button onclick="location.href='index.html'" class="mt-8 w-full py-4 text-xs text-gray-400 font-black bg-gray-100 rounded-xl transition uppercase tracking-widest">登出並返回問卷</button></div>`;
-            }, (err) => {
-                alert("🚨 讀取被攔截了！\n錯誤代碼：\n" + err.message);
-            });
+                // 成功回饋視窗
+                const overlay = document.createElement('div');
+                overlay.className = 'fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-6';
+                overlay.innerHTML = `
+                    <div class="bg-white rounded-3xl p-10 max-w-sm text-center space-y-4">
+                        <div class="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto text-2xl">✓</div>
+                        <h2 class="text-2xl font-semibold">報名程序完成</h2>
+                        <p class="text-gray-500 text-sm leading-relaxed">資料已成功送出並準備核對。本課程滿 15 人即開課，正式日期將透過 LINE 通知。期待與您見面！</p>
+                        <button onclick="location.reload()" class="w-full py-3 bg-black text-white rounded-xl font-medium">回到首頁</button>
+                    </div>
+                `;
+                document.body.appendChild(overlay);
+            } catch (error) {
+                console.error(error);
+                alert("系統忙碌中，請檢查網路連線或稍後再試。");
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('btn-disabled');
+                submitBtn.innerText = '確認報名並送出資料';
+            }
         };
     </script>
 </body>
