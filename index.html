@@ -24,7 +24,6 @@
 </head>
 <body>
 
-    <!-- 頂部導航 -->
     <nav class="sticky top-0 z-50 apple-blur border-b border-gray-100 px-6 py-3 flex justify-between items-center">
         <div class="flex items-center space-x-2"><span class="font-semibold text-lg tracking-tight">約書亞管理學院</span></div>
         <div class="hidden md:flex space-x-8 text-xs font-medium text-gray-500">
@@ -34,14 +33,12 @@
         </div>
     </nav>
 
-    <!-- 醒目公告欄 -->
     <div class="bg-blue-600 text-white text-center py-3 text-sm font-medium shadow-md">
         📢 即日起受理報名，滿 <span class="font-bold underline">15</span> 人即開課，開課日期將透過 <span class="font-bold underline">LINE</span> 另行通知。
     </div>
 
     <main class="max-w-7xl mx-auto px-6 py-12 lg:flex lg:space-x-16">
         
-        <!-- 左側：說明與流程 -->
         <div class="lg:w-1/2 lg:sticky lg:top-24 h-fit mb-16 lg:mb-0">
             <div class="rounded-3xl bg-white p-10 shadow-sm border border-gray-100">
                 <div id="overview" class="mb-10">
@@ -50,65 +47,36 @@
                         <span class="bg-gray-100 text-gray-800 px-3 py-1 rounded-full text-[10px] font-bold">滿 15 人開課</span>
                     </div>
                     <h1 class="text-4xl lg:text-5xl font-semibold mb-6 leading-tight">教會 AI <br>數位先鋒實戰營</h1>
-                    
                     <div class="space-y-6 text-gray-500 text-lg leading-relaxed mb-8">
                         <p>這不只是一門課程，而是教會數位轉型的起點。我們將帶領您掌握 AI 指話核心，讓事工更聰明、更有效率。</p>
                         <div class="p-4 bg-blue-50 rounded-2xl border border-blue-100">
                             <p class="text-blue-800 text-sm font-medium">✨ 全勤優惠激勵：</p>
-                            <p class="text-blue-700 text-xs font-semibold underline">實體班退費 $2,000 / 線上班退費 $500 (全勤完課後退費)</p>
+                            <p class="text-blue-700 text-xs font-semibold underline">實體班退費 $2,000 / 線上班退費 $500 (結訓後退費)</p>
                         </div>
                     </div>
                 </div>
 
-                <!-- 報名程序 -->
                 <div class="p-6 bg-gray-50 rounded-3xl border border-gray-100">
                     <h3 class="text-sm font-bold text-gray-900 mb-6 flex items-center">📋 完全報名程序</h3>
                     <div class="space-y-6 text-sm">
-                        <div class="flex items-start">
-                            <div class="step-circle bg-black text-white mr-4">1</div>
-                            <div>
-                                <p class="font-semibold">選擇方案</p>
-                                <p class="text-xs text-gray-400">實體班 (NT$ 12k) / 線上班 (NT$ 10k)</p>
-                            </div>
-                        </div>
-                        <div class="flex items-start">
-                            <div class="step-circle bg-black text-white mr-4">2</div>
-                            <div>
-                                <p class="font-semibold">匯款並填單</p>
-                                <p class="text-xs text-gray-400">完成匯款後填寫帳號末 5 碼</p>
-                                <p class="text-[10px] text-blue-600 font-medium mt-1 italic">台銀 (004) 信安分行 2400-0101-2927</p>
-                            </div>
-                        </div>
-                        <div class="flex items-start">
-                            <div class="step-circle bg-black text-white mr-4">3</div>
-                            <div>
-                                <p class="font-semibold">等待 LINE 通知</p>
-                                <p class="text-xs text-gray-400">滿 15 人後專人通知正式開課時間</p>
-                            </div>
-                        </div>
+                        <div class="flex items-start"><div class="step-circle bg-black text-white mr-4">1</div><div><p class="font-semibold">選擇方案</p><p class="text-xs text-gray-400">實體班 (NT$ 12k) / 線上班 (NT$ 10k)</p></div></div>
+                        <div class="flex items-start"><div class="step-circle bg-black text-white mr-4">2</div><div><p class="font-semibold">匯款並填單</p><p class="text-xs text-gray-400">完成匯款後填寫帳號末 5 碼</p><p class="text-[10px] text-blue-600 font-medium mt-1 italic">台銀 (004) 信安分行 2400-0101-2927</p></div></div>
+                        <div class="flex items-start"><div class="step-circle bg-black text-white mr-4">3</div><div><p class="font-semibold">等待 LINE 通知</p><p class="text-xs text-gray-400">滿 15 人後專人通知正式開課時間</p></div></div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- 右側：正式表單 -->
         <div class="lg:w-1/2 space-y-16">
-            
             <section id="selection">
                 <h2 class="text-2xl font-semibold mb-6">選擇參與方式</h2>
                 <div class="space-y-4">
                     <div id="opt-physical" class="option-card active rounded-2xl p-6 flex justify-between items-center" onclick="updatePrice(12000, 'physical')">
-                        <div class="space-y-1">
-                            <div class="font-semibold text-xl">實體課程</div>
-                            <div class="text-xs text-blue-600 font-medium">週四晚 7-9 PM | 台北中山北路二段</div>
-                        </div>
+                        <div class="space-y-1"><div class="font-semibold text-xl">實體課程</div><div class="text-xs text-blue-600 font-medium">週四晚 7-9 PM | 台北中山北路二段</div></div>
                         <div class="font-semibold text-lg text-right">NT$ 12,000</div>
                     </div>
                     <div id="opt-online" class="option-card rounded-2xl p-6 flex justify-between items-center" onclick="updatePrice(10000, 'online')">
-                        <div class="space-y-1">
-                            <div class="font-semibold text-xl">線上課程</div>
-                            <div class="text-xs text-blue-600 font-medium">週五晚 7-9 PM | ZOOM 即時授課</div>
-                        </div>
+                        <div class="space-y-1"><div class="font-semibold text-xl">線上課程</div><div class="text-xs text-blue-600 font-medium">週五晚 7-9 PM | ZOOM 即時授課</div></div>
                         <div class="font-semibold text-lg text-right">NT$ 10,000</div>
                     </div>
                 </div>
@@ -116,15 +84,12 @@
 
             <section id="form" class="bg-white rounded-3xl p-10 shadow-sm border border-gray-100">
                 <form id="joshuaForm" class="space-y-8">
-                    <!-- 欄位：基本資訊 -->
                     <div class="space-y-4">
                         <h3 class="form-section-title">基本資訊</h3>
                         <div class="grid grid-cols-2 gap-4">
                             <input name="userName" required placeholder="姓名 *" class="p-3 bg-gray-50 rounded-xl">
                             <select name="userGender" required class="p-3 bg-gray-50 rounded-xl text-gray-600">
-                                <option value="">性別 *</option>
-                                <option>男</option>
-                                <option>女</option>
+                                <option value="">性別 *</option><option>男</option><option>女</option>
                             </select>
                         </div>
                         <div class="grid grid-cols-2 gap-4">
@@ -133,12 +98,10 @@
                         </div>
                     </div>
 
-                    <!-- 欄位：事工背景 -->
                     <div class="space-y-4">
                         <h3 class="form-section-title">事工背景</h3>
                         <select name="userAgeRange" required class="w-full p-3 bg-gray-50 rounded-xl text-gray-600">
-                            <option value="">請選擇年齡層 *</option>
-                            <option>20歲以下</option><option>20~35歲</option><option>36~50歲</option><option>51~65歲</option><option>65歲以上</option>
+                            <option value="">請選擇年齡層 *</option><option>20~35歲</option><option>36~50歲</option><option>51~65歲</option><option>65歲以上</option>
                         </select>
                         <input name="userJobTitle" required placeholder="職稱 (如：小組長、同工) *" class="w-full p-3 bg-gray-50 rounded-xl">
                         <input name="userChurch" required placeholder="所屬教會 (無則填無) *" class="w-full p-3 bg-gray-50 rounded-xl">
@@ -146,83 +109,57 @@
                         <input name="userReferrer" required placeholder="推薦人 (無則填無) *" class="w-full p-3 bg-gray-50 rounded-xl">
                     </div>
 
-                    <!-- 欄位：匯款對帳 -->
                     <div class="space-y-4">
                         <h3 class="form-section-title">繳費核對 (請先匯款)</h3>
                         <div class="p-6 bank-info-box rounded-2xl">
-                            <p class="text-[10px] text-gray-500 mb-2 font-semibold text-center">臺灣銀行 (004) 信安分行</p>
+                            <p class="text-[10px] text-gray-500 mb-2 font-semibold text-center uppercase tracking-widest">約書亞管理學院 匯款專戶</p>
                             <p class="text-blue-600 font-bold text-2xl mb-1 text-center tracking-wider">2400 0101 2927</p>
-                            <p class="text-xs text-gray-700 font-medium text-center mb-6">戶名：博斯創新股份有限公司</p>
-                            
+                            <p class="text-xs text-gray-700 font-medium text-center mb-6">臺灣銀行 (004) 信安分行 | 戶名：博斯創新股份有限公司</p>
                             <label class="block text-xs font-bold mb-2 text-blue-600 text-center">請填寫您的匯款帳號末 5 碼 *</label>
                             <input name="bankLast5" required maxlength="5" placeholder="末 5 碼" class="w-full p-3 bg-white rounded-xl border-blue-200 text-center text-lg font-bold tracking-[0.5em] shadow-inner">
                         </div>
                     </div>
 
-                    <!-- 欄位：退費與備註（包班留言加回） -->
                     <div class="space-y-4">
-                        <h3 class="form-section-title">後續作業與留言</h3>
+                        <h3 class="form-section-title">備註與組班留言</h3>
                         <div class="p-4 bg-blue-50/50 rounded-xl border border-blue-100 grid grid-cols-2 gap-2">
                             <input name="refundBank" required placeholder="全勤退費銀行/代碼 *" class="p-2 bg-white rounded-lg text-xs">
                             <input name="refundAccount" required placeholder="退費匯入帳號 *" class="p-2 bg-white rounded-lg text-xs">
                         </div>
-                        <div>
-                            <label class="block text-[10px] font-bold text-gray-400 mb-1">組班報名 / 調整時間需求</label>
-                            <textarea name="groupNote" rows="2" placeholder="如有意組班報名，或需另調整時間請在此留言" class="w-full p-3 bg-gray-50 rounded-xl text-sm"></textarea>
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-bold text-gray-400 mb-1">其他備註</label>
-                            <textarea name="generalNote" rows="2" placeholder="其他想告訴我們的事" class="w-full p-3 bg-gray-50 rounded-xl text-sm"></textarea>
-                        </div>
+                        <textarea name="groupNote" rows="3" placeholder="組班報名 / 調整時間需求留言區" class="w-full p-3 bg-gray-50 rounded-xl text-sm"></textarea>
+                        <textarea name="generalNote" rows="3" placeholder="其他備註內容" class="w-full p-3 bg-gray-50 rounded-xl text-sm"></textarea>
                     </div>
 
-                    <button id="submitBtn" type="submit" class="w-full py-5 rounded-2xl font-semibold btn-primary text-lg shadow-xl shadow-blue-100">
-                        完成所有手續並送出報名
-                    </button>
+                    <button id="submitBtn" type="submit" class="w-full py-5 rounded-2xl font-semibold btn-primary text-lg shadow-xl shadow-blue-100">完成手續並送出報名</button>
                 </form>
             </section>
         </div>
     </main>
 
-    <!-- 底部固定條 -->
     <div class="fixed bottom-0 w-full apple-blur border-t border-gray-100 p-6 md:px-12 flex justify-between items-center z-50">
-        <div>
-            <p class="text-xs text-gray-400">目前選擇方案</p>
-            <p class="text-xl font-semibold"><span id="display-type">實體課程</span> <span class="text-blue-600" id="display-price">NT$ 12,000</span></p>
-        </div>
-        <button onclick="scrollToForm()" class="px-10 py-3 btn-primary rounded-full font-semibold shadow-lg shadow-blue-200">
-            開始報名
-        </button>
+        <div><p class="text-xs text-gray-400">目前選擇方案</p><p class="text-xl font-semibold"><span id="display-type">實體課程</span> <span class="text-blue-600" id="display-price">NT$ 12,000</span></p></div>
+        <button onclick="scrollToForm()" class="px-10 py-3 btn-primary rounded-full font-semibold shadow-lg shadow-blue-200">開始報名</button>
     </div>
 
-    <!-- Firebase SDK 串接 -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
         import { getAnalytics, logEvent } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js";
 
-        /** * Firebase 配置
-         * ※ 重要：請務必核對您的 apiKey。
-         */
         const firebaseConfig = {
-            apiKey: "AIzaSyCu4Yv99l3z78N6O5E2G8k5m8m-Z7y99A", 
-            authDomain: "test001-f2549.firebaseapp.com",
-            projectId: "test001-f2549",
-            storageBucket: "test001-f2549.firebasestorage.app",
-            messagingSenderId: "125959068007",
-            appId: "1:125959068007:web:86641838618388d1d867c4",
-            measurementId: "G-7Z0X3X7B49"
+            apiKey: "AIzaSyDhPRv89AcdgbBIMgjxX2V5cx8JY8bTfs0",
+            authDomain: "church-al-number.firebaseapp.com",
+            projectId: "church-al-number",
+            storageBucket: "church-al-number.firebasestorage.app",
+            messagingSenderId: "183472675090",
+            appId: "1:183472675090:web:bcb758461b8ab45372fbcb",
+            measurementId: "G-L0Q5R60FQ4"
         };
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
-        
         let analytics;
-        try {
-            analytics = getAnalytics(app);
-        } catch (e) {
-            console.warn("Analytics 初始化跳過（通常由 API Key 引發）");
-        }
+        try { analytics = getAnalytics(app); } catch (e) {}
 
         let currentPrice = 12000;
         let currentType = '實體課程';
@@ -237,9 +174,7 @@
             if (analytics) logEvent(analytics, 'plan_switched', { plan: currentType });
         };
 
-        window.scrollToForm = function() {
-            document.getElementById('form').scrollIntoView({ behavior: 'smooth' });
-        };
+        window.scrollToForm = function() { document.getElementById('form').scrollIntoView({ behavior: 'smooth' }); };
 
         const form = document.getElementById('joshuaForm');
         const submitBtn = document.getElementById('submitBtn');
@@ -251,42 +186,22 @@
             submitBtn.innerText = '正在處理報名資料...';
 
             const formData = new FormData(form);
-            const data = {
-                courseType: currentType,
-                amount: currentPrice,
-                timestamp: serverTimestamp(),
-                status: 'pending_verification'
-            };
+            const data = { courseType: currentType, amount: currentPrice, timestamp: serverTimestamp() };
             formData.forEach((value, key) => data[key] = value);
 
             try {
-                // 資料存入 Firestore
                 await addDoc(collection(db, "registrations"), data);
                 if (analytics) logEvent(analytics, 'registration_success');
-                
                 const overlay = document.createElement('div');
                 overlay.className = 'fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-6';
-                overlay.innerHTML = `
-                    <div class="bg-white rounded-3xl p-10 max-w-sm text-center space-y-4 shadow-2xl">
-                        <div class="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto text-3xl">✓</div>
-                        <h2 class="text-2xl font-semibold text-gray-900">報名手續已送出</h2>
-                        <p class="text-gray-500 text-sm leading-relaxed text-left">感謝您的熱忱參與！系統已成功記錄您的資料。<br><br>我們將儘速核對您的匯款末 5 碼，並由專人透過 LINE 邀請您加入班級社群。期待與您一起學習！</p>
-                        <button onclick="location.reload()" class="w-full py-4 bg-black text-white rounded-xl font-medium">回到報名首頁</button>
-                    </div>
-                `;
+                overlay.innerHTML = `<div class="bg-white rounded-3xl p-10 max-w-sm text-center space-y-4 shadow-2xl"><div class="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto text-3xl">✓</div><h2 class="text-2xl font-semibold text-gray-900">報名手續已送出</h2><p class="text-gray-500 text-sm leading-relaxed text-left">資料已成功送出！我們將核對匯款末 5 碼，並由專人透過 LINE 聯絡您。</p><button onclick="location.reload()" class="w-full py-4 bg-black text-white rounded-xl font-medium">回到首頁</button></div>`;
                 document.body.appendChild(overlay);
             } catch (error) {
-                console.error("Firebase 提交失敗: ", error);
-                let errorMsg = "伺服器連線繁忙中，請稍後再試。";
-                if (error.message.includes("API key not valid")) {
-                    errorMsg = "Firebase API 金鑰無效，請核對 index.html 代碼。";
-                } else if (error.code === 'permission-denied') {
-                    errorMsg = "資料庫寫入權限不足，請確認 Rules 已設定為 if true。";
-                }
-                alert("錯誤：" + errorMsg);
+                console.error(error);
+                alert("錯誤：" + (error.code === 'permission-denied' ? "資料庫寫入權限不足" : "連線失敗"));
                 submitBtn.disabled = false;
                 submitBtn.classList.remove('btn-disabled');
-                submitBtn.innerText = '完成所有手續並送出報名';
+                submitBtn.innerText = '送出報名';
             }
         };
     </script>
