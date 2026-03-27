@@ -144,7 +144,6 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getAnalytics, logEvent } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js";
 
         const firebaseConfig = {
@@ -159,15 +158,9 @@
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
-        const auth = getAuth(app);
         
         let analytics;
         try { analytics = getAnalytics(app); } catch (e) {}
-
-        const init = async () => {
-            await signInAnonymously(auth);
-        };
-        init();
 
         let currentPrice = 12000;
         let currentType = '實體課程';
@@ -189,33 +182,44 @@
 
         form.onsubmit = async function(e) {
             e.preventDefault();
-            if (!auth.currentUser) await signInAnonymously(auth);
             
             submitBtn.disabled = true;
             submitBtn.classList.add('btn-disabled');
             submitBtn.innerText = '正在處理報名資料...';
 
             const formData = new FormData(form);
-            const data = { courseType: currentType, amount: currentPrice, timestamp: serverTimestamp() };
-            formData.forEach((value, key) => data[key] = value);
+            const data = { 
+                courseType: currentType, 
+                amount: currentPrice, 
+                timestamp: serverTimestamp(),
+                userName: formData.get('userName'),
+                userPhone: formData.get('userPhone'),
+                userLineId: formData.get('userLineId'),
+                userChurch: formData.get('userChurch'),
+                userEmail: formData.get('userEmail'),
+                bankLast5: formData.get('bankLast5'),
+                groupNote: formData.get('groupNote'),
+                generalNote: formData.get('generalNote'),
+                refundBank: formData.get('refundBank'),
+                refundAccount: formData.get('refundAccount')
+            };
 
             try {
-                // 存入指定路徑以確保 admin 端能正確讀取
-                const appId = "church-al-number";
-                const registrationsRef = collection(db, 'artifacts', appId, 'public', 'data', 'registrations');
-                await addDoc(registrationsRef, data);
+                // 回歸最簡單的路徑：直接存入 registrations 集合
+                await addDoc(collection(db, "registrations"), data);
                 
                 if (analytics) logEvent(analytics, 'registration_success');
+                
                 const overlay = document.createElement('div');
                 overlay.className = 'fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-6';
                 overlay.innerHTML = `<div class="bg-white rounded-3xl p-10 max-w-sm text-center space-y-4 shadow-2xl"><div class="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto text-3xl">✓</div><h2 class="text-2xl font-semibold text-gray-900">報名手續已送出</h2><p class="text-gray-500 text-sm leading-relaxed text-left">資料已成功送出！我們將核對匯款末 5 碼，並由專人透過 LINE 聯絡您。</p><button onclick="location.reload()" class="w-full py-4 bg-black text-white rounded-xl font-medium">回到首頁</button></div>`;
                 document.body.appendChild(overlay);
             } catch (error) {
-                console.error(error);
-                alert("錯誤：" + (error.code === 'permission-denied' ? "資料庫權限不足" : "傳送失敗"));
+                console.error("提交錯誤：", error);
+                alert("傳送失敗：" + error.message);
                 submitBtn.disabled = false;
                 submitBtn.classList.remove('btn-disabled');
-                submitBtn.innerText = '送出報名';
+                submitBtn.innerText = '完成手續並送出報名';
             }
         };
     </script>
