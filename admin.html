@@ -70,7 +70,7 @@
             <div class="lg:col-span-2 stats-card !p-0 overflow-hidden flex flex-col">
                 <div class="p-6 border-b border-gray-50 flex justify-between items-center">
                     <h3 class="font-bold text-gray-800">學員明細與留言列表</h3>
-                    <input type="text" id="searchInput" placeholder="搜尋學員姓名..." class="text-xs border border-gray-200 rounded-xl px-4 py-2 w-1/2 outline-none focus:ring-2 focus:ring-blue-500">
+                    <input type="text" id="searchInput" placeholder="搜尋姓名、教會..." class="text-xs border border-gray-200 rounded-xl px-4 py-2 w-1/2 outline-none focus:ring-2 focus:ring-blue-500">
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-left text-xs">
@@ -79,12 +79,13 @@
                                 <th class="p-4">姓名</th>
                                 <th class="p-4">方案</th>
                                 <th class="p-4">末 5 碼</th>
+                                <th class="p-4">年齡/性別</th>
                                 <th class="p-4">留言與備註</th>
                                 <th class="p-4">所屬教會</th>
                             </tr>
                         </thead>
                         <tbody id="dataTable">
-                            <tr><td colspan="5" class="p-20 text-center text-gray-300 italic">正在連線雲端資料庫...</td></tr>
+                            <tr><td colspan="6" class="p-20 text-center text-gray-300 italic">正在連線雲端資料庫...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -96,15 +97,14 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getFirestore, collection, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // 對齊您 index.html 中的 Firebase 配置
+        // 對齊您截圖中顯示的 Firebase 配置
         const firebaseConfig = {
-            apiKey: "AIzaSyDhPRv89AcdgbBIMgjxX2V5cx8JY8bTfs0",
-            authDomain: "church-al-number.firebaseapp.com",
-            projectId: "church-al-number",
-            storageBucket: "church-al-number.firebasestorage.app",
-            messagingSenderId: "183472675090",
-            appId: "1:183472675090:web:bcb758461b8ab45372fbcb",
-            measurementId: "G-L0Q5R60FQ4"
+            apiKey: "AIzaSyDhPRv89AcdgbBIMgjxX2V5cx8JY8bTfs0", // 請確保此 apiKey 正確
+            authDomain: "church-ai-survey2.firebaseapp.com",
+            projectId: "church-ai-survey2",
+            storageBucket: "church-ai-survey2.firebasestorage.app",
+            messagingSenderId: "424950586352",
+            appId: "1:424950586352:web:7f25763deb5bc8fa39b35"
         };
 
         const app = initializeApp(firebaseConfig);
@@ -113,12 +113,17 @@
         let pieChart = null;
         let barChart = null;
 
-        // 【即時監聽：路徑對齊 registrations】
+        // 【監聽頻道：確保讀取 registrations 集合】
         const q = query(collection(db, "registrations"), orderBy("timestamp", "desc"));
         onSnapshot(q, (snapshot) => {
             allRecords = [];
-            snapshot.forEach((doc) => { allRecords.push(doc.data()); });
+            snapshot.forEach((doc) => { 
+                allRecords.push(doc.data()); 
+            });
             updateDashboard(allRecords);
+        }, (err) => {
+            console.error("同步失敗:", err);
+            document.getElementById('dataTable').innerHTML = `<tr><td colspan="6" class="p-10 text-center text-red-400 font-bold">同步失敗：請確認 Firebase Rules 設為 if true</td></tr>`;
         });
 
         function updateDashboard(data) {
@@ -127,16 +132,14 @@
             const online = data.filter(r => r.courseType === '線上課程').length;
             const revenue = data.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
 
-            // 更新數字
             document.getElementById('totalCount').innerText = total;
             document.getElementById('physicalCount').innerText = physical;
             document.getElementById('onlineCount').innerText = online;
             document.getElementById('totalRevenue').innerText = 'NT$ ' + revenue.toLocaleString();
 
-            // 更新表格
             const tableBody = document.getElementById('dataTable');
             if (total === 0) {
-                tableBody.innerHTML = `<tr><td colspan="5" class="p-20 text-center text-gray-400">目前尚無任何報名資料。</td></tr>`;
+                tableBody.innerHTML = `<tr><td colspan="6" class="p-20 text-center text-gray-400">目前尚無任何報名資料，請嘗試填寫一份測試。</td></tr>`;
             } else {
                 tableBody.innerHTML = data.map(r => `
                     <tr class="table-row border-b border-gray-50 transition-colors">
@@ -147,6 +150,7 @@
                             </span>
                         </td>
                         <td class="p-4 font-mono font-bold text-blue-600 tracking-widest">${r.bankLast5 || '---'}</td>
+                        <td class="p-4 text-gray-500 text-[10px]">${r.userAgeRange || ''} / ${r.userGender || ''}</td>
                         <td class="p-4 text-gray-500 text-[10px] leading-tight max-w-[200px] break-words">
                             ${r.groupNote ? '<p class="mb-1"><b>包班需求:</b> ' + r.groupNote + '</p>' : ''}
                             ${r.generalNote ? '<p><b>其他備註:</b> ' + r.generalNote + '</p>' : ''}
@@ -156,7 +160,6 @@
                 `).join('');
             }
 
-            // 更新圖表
             updateCharts(physical, online, data);
         }
 
@@ -165,7 +168,7 @@
             if(pieChart) pieChart.destroy();
             pieChart = new Chart(pieCtx, {
                 type: 'doughnut',
-                data: { labels: ['實體課程', '線上課程'], datasets: [{ data: [p, o], backgroundColor: ['#2563eb', '#10b981'], borderWidth: 0 }] },
+                data: { labels: ['實體', '線上'], datasets: [{ data: [p, o], backgroundColor: ['#2563eb', '#10b981'], borderWidth: 0 }] },
                 options: { maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, cutout: '70%' }
             });
 
@@ -182,14 +185,14 @@
 
         window.exportToCSV = function() {
             if (allRecords.length === 0) return alert("目前尚無資料");
-            let csv = "\uFEFF時間,姓名,方案,金額,末5碼,年齡,教會,備註\n";
+            let csv = "\uFEFF姓名,方案,金額,末5碼,年齡,性別,教會,備註\n";
             allRecords.forEach(r => {
-                csv += `"${r.timestamp ? new Date(r.timestamp.seconds*1000).toLocaleString() : ''}","${r.userName}","${r.courseType}","${r.amount}","${r.bankLast5}","${r.userAgeRange}","${r.userChurch}","${r.groupNote} ${r.generalNote}"\n`;
+                csv += `"${r.userName}","${r.courseType}","${r.amount}","${r.bankLast5}","${r.userAgeRange}","${r.userGender}","${r.userChurch}","${r.groupNote} ${r.generalNote}"\n`;
             });
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
             link.href = URL.createObjectURL(blob);
-            link.setAttribute("download", `約書亞實戰營報名清單_${new Date().toLocaleDateString()}.csv`);
+            link.setAttribute("download", `約書亞統計表_${new Date().toLocaleDateString()}.csv`);
             link.click();
         };
 
