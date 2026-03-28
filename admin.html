@@ -3,89 +3,92 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>管理後台 - 約書亞管理學院 數據統計報告</title>
+    <title>管理後台 - 約書亞管理學院 數據即時看板</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', -apple-system, sans-serif; background-color: #fafafa; color: #1f2937; }
-        .stats-card { background: white; border-radius: 1.5rem; padding: 2rem; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
-        .chart-container { position: relative; width: 100%; max-width: 600px; margin-left: auto; margin-right: auto; height: 300px; max-height: 400px; }
-        .table-row:hover { background-color: #f8fafc; }
+        body { font-family: 'Inter', -apple-system, sans-serif; background-color: #f8fafc; color: #1e293b; }
+        .stats-card { background: white; border-radius: 1.5rem; padding: 2rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #f1f5f9; }
+        .chart-container { position: relative; width: 100%; height: 300px; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
     </style>
 </head>
-<body class="antialiased pb-20">
+<body class="antialiased pb-12">
 
+    <!-- 頂部導航與狀態顯示 -->
     <nav class="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100 px-8 py-4 mb-8">
         <div class="max-w-7xl mx-auto flex justify-between items-center">
-            <h1 class="text-xl font-bold text-gray-900 tracking-tight">約書亞管理學院 - 報名數據即時看板</h1>
-            <div class="flex gap-4">
-                <button onclick="exportToCSV()" class="text-xs bg-emerald-600 text-white px-5 py-2 rounded-xl font-bold transition-all shadow-lg shadow-emerald-100 hover:bg-emerald-700">📥 導出數據</button>
-                <button onclick="location.reload()" class="text-xs bg-white border border-gray-200 text-gray-600 px-5 py-2 rounded-xl font-bold hover:bg-gray-50">🔄 刷新</button>
+            <div>
+                <h1 class="text-xl font-bold text-gray-900 tracking-tight">約書亞管理學院 - 數據後台</h1>
+                <div class="flex items-center text-[10px] mt-1 text-gray-400">
+                    <span id="conn-dot" class="status-dot bg-gray-300"></span>
+                    <span id="conn-text">正在連線至雲端資料庫...</span>
+                </div>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="exportToCSV()" class="text-xs bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-emerald-100 hover:bg-emerald-700">導出 Excel</button>
+                <button onclick="location.reload()" class="text-xs bg-gray-900 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-black transition-all">手動刷新</button>
             </div>
         </div>
     </nav>
 
-    <main class="max-w-7xl mx-auto px-6 space-y-10">
-        
-        <!-- 核心指標 -->
-        <section>
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
-                <div class="stats-card">
-                    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">總報名人數</p>
-                    <h2 id="totalCount" class="text-5xl font-bold text-blue-600 mt-2">0</h2>
-                </div>
-                <div class="stats-card">
-                    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">預計總營收</p>
-                    <h2 id="totalRevenue" class="text-3xl font-bold text-gray-900 mt-4">NT$ 0</h2>
-                </div>
-                <div class="stats-card">
-                    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">實體班進度</p>
-                    <div class="flex items-end gap-1 mt-4">
-                        <h2 id="physicalCount" class="text-3xl font-bold text-indigo-600">0</h2>
-                        <span class="text-gray-300 font-medium pb-1">/ 15 人</span>
-                    </div>
-                </div>
-                <div class="stats-card">
-                    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">線上課程人數</p>
-                    <h2 id="onlineCount" class="text-3xl font-bold text-emerald-600 mt-4">0</h2>
+    <main class="max-w-7xl mx-auto px-6 space-y-8">
+        <!-- 關鍵數據卡片 -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div class="stats-card text-center">
+                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">總報名人數</p>
+                <h2 id="totalCount" class="text-5xl font-extrabold text-blue-600 mt-2">0</h2>
+            </div>
+            <div class="stats-card text-center">
+                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">實體班進度</p>
+                <div class="flex items-end justify-center gap-1 mt-2">
+                    <h2 id="physicalCount" class="text-5xl font-extrabold text-indigo-600">0</h2>
+                    <span class="text-gray-300 font-bold pb-1 text-sm">/ 15</span>
                 </div>
             </div>
-        </section>
+            <div class="stats-card text-center">
+                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">線上課程</p>
+                <h2 id="onlineCount" class="text-5xl font-extrabold text-emerald-600 mt-2">0</h2>
+            </div>
+            <div class="stats-card text-center">
+                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">預估總營收</p>
+                <h2 id="totalRevenue" class="text-2xl font-bold text-gray-900 mt-4">NT$ 0</h2>
+            </div>
+        </div>
 
-        <!-- 圖表分析 -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-10">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- 圓餅圖與長條圖 -->
             <div class="lg:col-span-1 space-y-8">
-                <div class="stats-card flex flex-col items-center">
-                    <h3 class="font-bold text-gray-800 mb-8 w-full">方案比例分析</h3>
+                <div class="stats-card">
+                    <h3 class="font-bold text-gray-800 mb-6">方案分佈比例</h3>
                     <div class="chart-container"><canvas id="pieChart"></canvas></div>
                 </div>
-                <div class="stats-card flex flex-col items-center">
-                    <h3 class="font-bold text-gray-800 mb-8 w-full">學員年齡分佈</h3>
+                <div class="stats-card">
+                    <h3 class="font-bold text-gray-800 mb-6">年齡層分佈</h3>
                     <div class="chart-container"><canvas id="barChart"></canvas></div>
                 </div>
             </div>
 
-            <!-- 明細列表 -->
+            <!-- 學員明細表格 -->
             <div class="lg:col-span-2 stats-card !p-0 overflow-hidden flex flex-col">
-                <div class="p-6 border-b border-gray-50 flex justify-between items-center">
-                    <h3 class="font-bold text-gray-800">學員明細與留言列表</h3>
-                    <input type="text" id="searchInput" placeholder="搜尋姓名、教會..." class="text-xs border border-gray-200 rounded-xl px-4 py-2 w-1/2 outline-none focus:ring-2 focus:ring-blue-500">
+                <div class="p-6 border-b border-gray-50 flex justify-between items-center bg-white">
+                    <h3 class="font-bold text-gray-800">最新報名學員清單</h3>
+                    <input type="text" id="searchInput" placeholder="搜尋姓名或教會..." class="text-sm border border-gray-100 rounded-xl px-4 py-2 w-1/2 focus:ring-2 focus:ring-blue-500 outline-none">
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-left text-xs">
-                        <thead class="bg-gray-50 font-bold text-gray-400 uppercase">
+                        <thead class="bg-gray-50/50 text-gray-400 font-bold">
                             <tr>
                                 <th class="p-4">姓名</th>
-                                <th class="p-4">方案</th>
-                                <th class="p-4">末 5 碼</th>
-                                <th class="p-4">年齡/性別</th>
-                                <th class="p-4">留言與備註</th>
+                                <th class="p-4">參與方案</th>
+                                <th class="p-4">帳號末 5 碼</th>
+                                <th class="p-4">包班需求與備註</th>
                                 <th class="p-4">所屬教會</th>
                             </tr>
                         </thead>
                         <tbody id="dataTable">
-                            <tr><td colspan="6" class="p-20 text-center text-gray-300 italic">正在連線雲端資料庫...</td></tr>
+                            <tr><td colspan="5" class="p-20 text-center text-gray-300 italic">正在連線雲端資料庫...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -97,9 +100,9 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getFirestore, collection, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // 對齊您截圖中顯示的 Firebase 配置
+        // 【自動校正：謝先生的專案配置】
         const firebaseConfig = {
-            apiKey: "AIzaSyDhPRv89AcdgbBIMgjxX2V5cx8JY8bTfs0", // 請確保此 apiKey 正確
+            apiKey: "AIzaSyDhPRv89AcdgbBIMgjxX2V5cx8JY8bTfs0",
             authDomain: "church-ai-survey2.firebaseapp.com",
             projectId: "church-ai-survey2",
             storageBucket: "church-ai-survey2.firebasestorage.app",
@@ -110,21 +113,35 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         let allRecords = [];
-        let pieChart = null;
-        let barChart = null;
+        let pieInstance = null;
+        let barInstance = null;
 
-        // 【監聽頻道：確保讀取 registrations 集合】
-        const q = query(collection(db, "registrations"), orderBy("timestamp", "desc"));
-        onSnapshot(q, (snapshot) => {
-            allRecords = [];
-            snapshot.forEach((doc) => { 
-                allRecords.push(doc.data()); 
+        const updateStatus = (status, colorClass) => {
+            const dot = document.getElementById('conn-dot');
+            const text = document.getElementById('conn-text');
+            dot.className = `status-dot ${colorClass}`;
+            text.innerText = status;
+        };
+
+        // 【數據監聽核心】
+        try {
+            const registrationsRef = collection(db, "registrations");
+            const q = query(registrationsRef, orderBy("timestamp", "desc"));
+
+            onSnapshot(q, (snapshot) => {
+                allRecords = [];
+                snapshot.forEach((doc) => {
+                    allRecords.push(doc.data());
+                });
+                updateDashboard(allRecords);
+                updateStatus('雲端連線正常：數據已同步', 'bg-green-500');
+            }, (error) => {
+                console.error("Firebase Error:", error);
+                updateStatus(`連線失敗：${error.message}`, 'bg-red-500');
             });
-            updateDashboard(allRecords);
-        }, (err) => {
-            console.error("同步失敗:", err);
-            document.getElementById('dataTable').innerHTML = `<tr><td colspan="6" class="p-10 text-center text-red-400 font-bold">同步失敗：請確認 Firebase Rules 設為 if true</td></tr>`;
-        });
+        } catch (e) {
+            updateStatus(`初始化失敗：${e.message}`, 'bg-red-500');
+        }
 
         function updateDashboard(data) {
             const total = data.length;
@@ -139,44 +156,44 @@
 
             const tableBody = document.getElementById('dataTable');
             if (total === 0) {
-                tableBody.innerHTML = `<tr><td colspan="6" class="p-20 text-center text-gray-400">目前尚無任何報名資料，請嘗試填寫一份測試。</td></tr>`;
+                tableBody.innerHTML = `<tr><td colspan="5" class="p-20 text-center text-gray-400">目前尚無報名資料，請嘗試在報名網頁填寫測試。</td></tr>`;
             } else {
                 tableBody.innerHTML = data.map(r => `
                     <tr class="table-row border-b border-gray-50 transition-colors">
-                        <td class="p-4 font-bold text-gray-900">${r.userName || ''}</td>
+                        <td class="p-4 font-bold text-gray-900">${r.userName || '未填'}</td>
                         <td class="p-4">
-                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${r.courseType === '實體課程' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}">
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${r.courseType === '實體課程' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}">
                                 ${r.courseType || ''}
                             </span>
                         </td>
-                        <td class="p-4 font-mono font-bold text-blue-600 tracking-widest">${r.bankLast5 || '---'}</td>
-                        <td class="p-4 text-gray-500 text-[10px]">${r.userAgeRange || ''} / ${r.userGender || ''}</td>
-                        <td class="p-4 text-gray-500 text-[10px] leading-tight max-w-[200px] break-words">
-                            ${r.groupNote ? '<p class="mb-1"><b>包班需求:</b> ' + r.groupNote + '</p>' : ''}
-                            ${r.generalNote ? '<p><b>其他備註:</b> ' + r.generalNote + '</p>' : ''}
+                        <td class="p-4 font-mono font-bold text-indigo-600 tracking-widest">${r.bankLast5 || '---'}</td>
+                        <td class="p-4 text-gray-500 text-[10px] leading-relaxed">
+                            <div class="max-w-[220px] break-words">
+                                ${r.groupNote ? '<b>包班需求:</b> ' + r.groupNote : ''}
+                                ${r.generalNote ? '<br><b>備註:</b> ' + r.generalNote : ''}
+                            </div>
                         </td>
                         <td class="p-4 text-gray-400 font-medium">${r.userChurch || ''}</td>
                     </tr>
                 `).join('');
             }
-
             updateCharts(physical, online, data);
         }
 
         function updateCharts(p, o, data) {
             const pieCtx = document.getElementById('pieChart').getContext('2d');
-            if(pieChart) pieChart.destroy();
-            pieChart = new Chart(pieCtx, {
+            if(pieInstance) pieInstance.destroy();
+            pieInstance = new Chart(pieCtx, {
                 type: 'doughnut',
-                data: { labels: ['實體', '線上'], datasets: [{ data: [p, o], backgroundColor: ['#2563eb', '#10b981'], borderWidth: 0 }] },
+                data: { labels: ['實體班', '線上班'], datasets: [{ data: [p, o], backgroundColor: ['#2563eb', '#10b981'], borderWidth: 0 }] },
                 options: { maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, cutout: '70%' }
             });
 
             const ages = ['20~35歲', '36~50歲', '51~65歲', '65歲以上'];
             const ageData = ages.map(label => data.filter(r => r.userAgeRange === label).length);
             const barCtx = document.getElementById('barChart').getContext('2d');
-            if(barChart) barChart.destroy();
-            barChart = new Chart(barCtx, {
+            if(barInstance) barInstance.destroy();
+            barInstance = new Chart(barCtx, {
                 type: 'bar',
                 data: { labels: ages, datasets: [{ label: '人數', data: ageData, backgroundColor: '#6366f1', borderRadius: 8 }] },
                 options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { borderDash: [5, 5] } }, x: { grid: { display: false } } } }
@@ -184,15 +201,15 @@
         }
 
         window.exportToCSV = function() {
-            if (allRecords.length === 0) return alert("目前尚無資料");
-            let csv = "\uFEFF姓名,方案,金額,末5碼,年齡,性別,教會,備註\n";
+            if (allRecords.length === 0) return alert("目前暫無資料可供導出。");
+            let csv = "\uFEFF姓名,方案,金額,末5碼,年齡層,性別,教會,組班備註\n";
             allRecords.forEach(r => {
-                csv += `"${r.userName}","${r.courseType}","${r.amount}","${r.bankLast5}","${r.userAgeRange}","${r.userGender}","${r.userChurch}","${r.groupNote} ${r.generalNote}"\n`;
+                csv += `"${r.userName}","${r.courseType}","${r.amount}","${r.bankLast5}","${r.userAgeRange}","${r.userGender}","${r.userChurch}","${r.groupNote || ''} ${r.generalNote || ''}"\n`;
             });
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
             link.href = URL.createObjectURL(blob);
-            link.setAttribute("download", `約書亞統計表_${new Date().toLocaleDateString()}.csv`);
+            link.setAttribute("download", `約書亞實戰營報名表_${new Date().toLocaleDateString()}.csv`);
             link.click();
         };
 
