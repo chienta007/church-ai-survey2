@@ -11,69 +11,61 @@
         body { font-family: 'Inter', -apple-system, sans-serif; background-color: #f8fafc; color: #1e293b; }
         .stats-card { background: white; border-radius: 1.5rem; padding: 2rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #f1f5f9; }
         .chart-container { position: relative; width: 100%; height: 300px; }
-        .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+        .status-dot { width: 100%; padding: 8px; border-radius: 8px; font-size: 12px; font-weight: bold; margin-bottom: 20px; text-align: center; }
+        .log-window { background: #1e1e1e; color: #00ff00; font-family: monospace; padding: 15px; border-radius: 8px; font-size: 11px; max-height: 150px; overflow-y: auto; }
     </style>
 </head>
 <body class="antialiased pb-12">
 
-    <!-- 頂部導航 -->
-    <nav class="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100 px-8 py-4 mb-8">
+    <nav class="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100 px-8 py-4 mb-4">
         <div class="max-w-7xl mx-auto flex justify-between items-center">
             <div>
                 <h1 class="text-xl font-bold text-gray-900 tracking-tight">約書亞管理學院 - 數據後台</h1>
-                <div class="flex items-center text-[10px] mt-1 text-gray-400">
-                    <span id="conn-dot" class="status-dot bg-yellow-500"></span>
-                    <span id="conn-text">正在掃描雲端資料庫頻道...</span>
-                </div>
+                <p class="text-[10px] text-gray-400">專案 ID: church-ai-survey2</p>
             </div>
             <div class="flex gap-3">
-                <button onclick="exportToCSV()" class="text-xs bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-emerald-100 hover:bg-emerald-700">導出 Excel</button>
-                <button onclick="location.reload()" class="text-xs bg-gray-900 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-black transition-all">手動刷新</button>
+                <button onclick="exportToCSV()" class="text-xs bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-bold">導出 Excel</button>
+                <button onclick="location.reload()" class="text-xs bg-gray-900 text-white px-5 py-2.5 rounded-xl font-bold">手動刷新</button>
             </div>
         </div>
     </nav>
 
-    <main class="max-w-7xl mx-auto px-6 space-y-8">
+    <main class="max-w-7xl mx-auto px-6 space-y-6">
+        
+        <!-- 連線診斷指示燈 -->
+        <div id="conn-status" class="status-dot bg-yellow-100 text-yellow-700">正在嘗試連線雲端資料庫...</div>
+
         <!-- 核心指標 -->
         <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div class="stats-card text-center">
-                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">總報名人數</p>
+                <p class="text-[10px] font-bold text-gray-400 uppercase">總報名人數</p>
                 <h2 id="totalCount" class="text-5xl font-extrabold text-blue-600 mt-2">0</h2>
             </div>
             <div class="stats-card text-center">
-                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">實體班進度</p>
-                <div class="flex items-end justify-center gap-1 mt-2">
-                    <h2 id="physicalCount" class="text-5xl font-extrabold text-indigo-600">0</h2>
-                    <span class="text-gray-300 font-bold pb-1 text-sm">/ 15</span>
-                </div>
+                <p class="text-[10px] font-bold text-gray-400 uppercase">實體班 (目標15)</p>
+                <h2 id="physicalCount" class="text-5xl font-extrabold text-indigo-600 mt-2">0</h2>
             </div>
             <div class="stats-card text-center">
-                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">線上課程</p>
+                <p class="text-[10px] font-bold text-gray-400 uppercase">線上課程</p>
                 <h2 id="onlineCount" class="text-5xl font-extrabold text-emerald-600 mt-2">0</h2>
             </div>
             <div class="stats-card text-center">
-                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">預估總營收</p>
+                <p class="text-[10px] font-bold text-gray-400 uppercase">預估總營收</p>
                 <h2 id="totalRevenue" class="text-2xl font-bold text-gray-900 mt-4">NT$ 0</h2>
             </div>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div class="lg:col-span-1 space-y-8">
-                <div class="stats-card">
-                    <h3 class="font-bold text-gray-800 mb-6 text-sm uppercase tracking-wider">方案分佈比例</h3>
-                    <div class="chart-container"><canvas id="pieChart"></canvas></div>
-                </div>
-                <div class="stats-card">
-                    <h3 class="font-bold text-gray-800 mb-6 text-sm uppercase tracking-wider">學員年齡分佈</h3>
-                    <div class="chart-container"><canvas id="barChart"></canvas></div>
-                </div>
+            <div class="lg:col-span-1 space-y-6">
+                <div class="stats-card"><div class="chart-container"><canvas id="pieChart"></canvas></div></div>
+                <div class="stats-card"><div class="chart-container"><canvas id="barChart"></canvas></div></div>
             </div>
 
             <!-- 學員表格 -->
             <div class="lg:col-span-2 stats-card !p-0 overflow-hidden flex flex-col">
                 <div class="p-6 border-b border-gray-50 flex justify-between items-center bg-white">
-                    <h3 class="font-bold text-gray-800">報名學員清單 (含留言/備註)</h3>
-                    <input type="text" id="searchInput" placeholder="搜尋姓名或教會..." class="text-sm border border-gray-100 rounded-xl px-4 py-2 w-1/2 focus:ring-2 focus:ring-blue-500 outline-none">
+                    <h3 class="font-bold text-gray-800">學員明細清單</h3>
+                    <input type="text" id="searchInput" placeholder="搜尋姓名..." class="text-sm border border-gray-100 rounded-xl px-4 py-2">
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-left text-xs">
@@ -82,15 +74,23 @@
                                 <th class="p-4">姓名</th>
                                 <th class="p-4">方案/年齡</th>
                                 <th class="p-4">帳號末 5 碼</th>
-                                <th class="p-4">備註與需求</th>
-                                <th class="p-4">所屬教會</th>
+                                <th class="p-4">備註留言</th>
+                                <th class="p-4">教會</th>
                             </tr>
                         </thead>
                         <tbody id="dataTable">
-                            <tr><td colspan="5" class="p-20 text-center text-gray-300 italic font-medium tracking-widest">正在掃描資料庫路徑...</td></tr>
+                            <tr><td colspan="5" class="p-20 text-center text-gray-300">連線中...</td></tr>
                         </tbody>
                     </table>
                 </div>
+            </div>
+        </div>
+
+        <!-- 系統診斷日誌 -->
+        <div class="mt-8">
+            <p class="text-[10px] font-bold text-gray-400 mb-2 uppercase">系統診斷日誌 (Debug Logs)</p>
+            <div id="debug-log" class="log-window">
+                [系統訊息] 初始化完畢，準備連線 Firebase...
             </div>
         </div>
     </main>
@@ -99,7 +99,6 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getFirestore, collection, onSnapshot, query } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // 專案配置：church-ai-survey2
         const firebaseConfig = {
             apiKey: "AIzaSyDhPRv89AcdgbBIMgjxX2V5cx8JY8bTfs0",
             authDomain: "church-ai-survey2.firebaseapp.com",
@@ -115,88 +114,66 @@
         let pieInstance = null;
         let barInstance = null;
 
-        // 掃描器邏輯：同時監聽兩個可能的路徑
-        const paths = [
-            "registrations",
-            "artifacts/church-ai-survey2/public/data/registrations"
-        ];
+        const log = (msg) => {
+            const div = document.getElementById('debug-log');
+            div.innerHTML += `<br>[${new Date().toLocaleTimeString()}] ${msg}`;
+            div.scrollTop = div.scrollHeight;
+        };
 
-        let activeListeners = 0;
-        const recordMap = new Map(); // 用 Map 避免重複抓取
+        const setStatus = (msg, colorClass) => {
+            const el = document.getElementById('conn-status');
+            el.innerText = msg;
+            el.className = `status-dot ${colorClass}`;
+        };
 
-        paths.forEach(path => {
-            try {
-                const ref = collection(db, path);
-                onSnapshot(ref, (snapshot) => {
-                    snapshot.forEach(doc => {
-                        recordMap.set(doc.id, doc.data());
-                    });
-                    processAllData();
-                    activeListeners++;
-                    updateStatusText();
-                }, (err) => {
-                    console.warn(`路徑 ${path} 無法存取:`, err.message);
+        // 【終極連線邏輯】
+        try {
+            log("正在嘗試讀取 'registrations' 集合...");
+            // 移除 orderBy 以免因為缺失 timestamp 欄位導致 query 失敗
+            const q = query(collection(db, "registrations"));
+
+            onSnapshot(q, (snapshot) => {
+                log(`連線成功！偵測到資料量：${snapshot.size} 筆`);
+                if (snapshot.size === 0) {
+                    setStatus("目前資料庫內尚無任何報名資料", "bg-blue-100 text-blue-700");
+                } else {
+                    setStatus(`連線正常：已同步 ${snapshot.size} 筆數據`, "bg-green-100 text-green-700");
+                }
+                
+                allRecords = [];
+                snapshot.forEach((doc) => {
+                    allRecords.push(doc.data());
                 });
-            } catch (e) {
-                console.error(`初始化路徑 ${path} 失敗`);
-            }
-        });
-
-        function updateStatusText() {
-            const dot = document.getElementById('conn-dot');
-            const text = document.getElementById('conn-text');
-            if (activeListeners > 0) {
-                dot.className = 'status-dot bg-green-500';
-                text.innerText = '雲端連線正常：數據監控中';
-            }
-        }
-
-        function processAllData() {
-            allRecords = Array.from(recordMap.values());
-            // 按時間排序（如果有 timestamp 欄位的話）
-            allRecords.sort((a, b) => {
-                const tA = a.timestamp?.seconds || 0;
-                const tB = b.timestamp?.seconds || 0;
-                return tB - tA;
+                updateDashboard(allRecords);
+            }, (error) => {
+                log(`連線出錯！錯誤碼：${error.code}`);
+                log(`詳細訊息：${error.message}`);
+                setStatus(`連線失敗：${error.code === 'permission-denied' ? '讀取權限被拒絕' : error.message}`, "bg-red-100 text-red-700");
             });
-            updateDashboard(allRecords);
+        } catch (e) {
+            log(`初始化失敗：${e.message}`);
         }
 
         function updateDashboard(data) {
-            const total = data.length;
             const physical = data.filter(r => r.courseType === '實體課程').length;
             const online = data.filter(r => r.courseType === '線上課程').length;
             const revenue = data.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
 
-            document.getElementById('totalCount').innerText = total;
+            document.getElementById('totalCount').innerText = data.length;
             document.getElementById('physicalCount').innerText = physical;
             document.getElementById('onlineCount').innerText = online;
             document.getElementById('totalRevenue').innerText = 'NT$ ' + revenue.toLocaleString();
 
-            const tableBody = document.getElementById('dataTable');
-            if (total === 0) {
-                tableBody.innerHTML = `<tr><td colspan="5" class="p-20 text-center text-gray-400">目前雲端資料庫是空的。請填寫一筆測試報名。</td></tr>`;
-            } else {
-                tableBody.innerHTML = data.map(r => `
-                    <tr class="border-b border-gray-50 transition-colors hover:bg-gray-50">
-                        <td class="p-4 font-bold text-gray-900">${r.userName || '未填'}</td>
-                        <td class="p-4">
-                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${r.courseType === '實體課程' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}">
-                                ${r.courseType || ''}
-                            </span>
-                            <div class="text-[9px] text-gray-400 mt-1">${r.userAgeRange || ''}</div>
-                        </td>
-                        <td class="p-4 font-mono font-bold text-indigo-600 tracking-widest">${r.bankLast5 || '---'}</td>
-                        <td class="p-4 text-gray-500 text-[10px] leading-relaxed">
-                            <div class="max-w-[220px] break-words">
-                                ${r.groupNote ? '<b>[組班]</b> ' + r.groupNote : ''}
-                                ${r.generalNote ? '<br><b>[備註]</b> ' + r.generalNote : ''}
-                            </div>
-                        </td>
-                        <td class="p-4 text-gray-400 font-medium">${r.userChurch || ''}</td>
-                    </tr>
-                `).join('');
-            }
+            document.getElementById('dataTable').innerHTML = data.map(r => `
+                <tr class="border-b border-gray-50">
+                    <td class="p-4 font-bold text-gray-900">${r.userName || '未填'}</td>
+                    <td class="p-4">${r.courseType || ''}<br><span class="text-[9px] text-gray-400">${r.userAgeRange || ''}</span></td>
+                    <td class="p-4 font-mono font-bold text-indigo-600">${r.bankLast5 || '---'}</td>
+                    <td class="p-4 text-gray-500 leading-tight">${r.groupNote || ''} ${r.generalNote || ''}</td>
+                    <td class="p-4 text-gray-400">${r.userChurch || ''}</td>
+                </tr>
+            `).join('') || '<tr><td colspan="5" class="p-10 text-center">暫無內容</td></tr>';
+
             updateCharts(physical, online, data);
         }
 
@@ -205,8 +182,8 @@
             if(pieInstance) pieInstance.destroy();
             pieInstance = new Chart(pieCtx, {
                 type: 'doughnut',
-                data: { labels: ['實體班', '線上班'], datasets: [{ data: [p, o], backgroundColor: ['#2563eb', '#10b981'], borderWidth: 0 }] },
-                options: { maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, cutout: '70%' }
+                data: { labels: ['實體', '線上'], datasets: [{ data: [p, o], backgroundColor: ['#2563eb', '#10b981'], borderWidth: 0 }] },
+                options: { maintainAspectRatio: false, cutout: '70%' }
             });
 
             const ages = ['20~35歲', '36~50歲', '51~65歲', '65歲以上'];
@@ -216,28 +193,20 @@
             barInstance = new Chart(barCtx, {
                 type: 'bar',
                 data: { labels: ages, datasets: [{ label: '人數', data: ageData, backgroundColor: '#6366f1', borderRadius: 8 }] },
-                options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { borderDash: [5, 5] } }, x: { grid: { display: false } } } }
+                options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
             });
         }
 
         window.exportToCSV = function() {
-            if (allRecords.length === 0) return alert("尚無資料可導出。");
-            let csv = "\uFEFF姓名,方案,年齡,金額,末5碼,手機,LINE ID,教會,組班備註\n";
-            allRecords.forEach(r => {
-                csv += `"${r.userName}","${r.courseType}","${r.userAgeRange}","${r.amount}","${r.bankLast5}","${r.userPhone}","${r.userLineId}","${r.userChurch}","${r.groupNote || ''} ${r.generalNote || ''}"\n`;
-            });
+            if (allRecords.length === 0) return alert("尚無資料");
+            let csv = "\uFEFF姓名,方案,年齡,末5碼,教會,留言\n";
+            allRecords.forEach(r => { csv += `"${r.userName}","${r.courseType}","${r.userAgeRange}","${r.bankLast5}","${r.userChurch}","${r.groupNote} ${r.generalNote}"\n`; });
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
             link.href = URL.createObjectURL(blob);
-            link.setAttribute("download", `約書亞招生統計_${new Date().toLocaleDateString()}.csv`);
+            link.setAttribute("download", `約書亞報名表_${new Date().toLocaleDateString()}.csv`);
             link.click();
         };
-
-        document.getElementById('searchInput').addEventListener('input', (e) => {
-            const term = e.target.value.toLowerCase();
-            const filtered = allRecords.filter(r => (r.userName || '').toLowerCase().includes(term) || (r.userChurch || '').toLowerCase().includes(term));
-            updateDashboard(filtered);
-        });
     </script>
 </body>
 </html>
