@@ -22,8 +22,8 @@
             <div>
                 <h1 class="text-xl font-bold text-gray-900 tracking-tight">約書亞管理學院 - 數據後台</h1>
                 <div class="flex items-center text-[10px] mt-1 text-gray-400">
-                    <span id="conn-dot" class="status-dot bg-green-500"></span>
-                    <span id="conn-text">雲端連線模式：直連已啟動</span>
+                    <span id="conn-dot" class="status-dot bg-yellow-500"></span>
+                    <span id="conn-text">正在掃描雲端資料庫頻道...</span>
                 </div>
             </div>
             <div class="flex gap-3">
@@ -72,7 +72,7 @@
             <!-- 學員表格 -->
             <div class="lg:col-span-2 stats-card !p-0 overflow-hidden flex flex-col">
                 <div class="p-6 border-b border-gray-50 flex justify-between items-center bg-white">
-                    <h3 class="font-bold text-gray-800">報名學員清單 (含年齡/留言)</h3>
+                    <h3 class="font-bold text-gray-800">報名學員清單 (含留言/備註)</h3>
                     <input type="text" id="searchInput" placeholder="搜尋姓名或教會..." class="text-sm border border-gray-100 rounded-xl px-4 py-2 w-1/2 focus:ring-2 focus:ring-blue-500 outline-none">
                 </div>
                 <div class="overflow-x-auto">
@@ -82,12 +82,12 @@
                                 <th class="p-4">姓名</th>
                                 <th class="p-4">方案/年齡</th>
                                 <th class="p-4">帳號末 5 碼</th>
-                                <th class="p-4">備註留言與需求</th>
+                                <th class="p-4">備註與需求</th>
                                 <th class="p-4">所屬教會</th>
                             </tr>
                         </thead>
                         <tbody id="dataTable">
-                            <tr><td colspan="5" class="p-20 text-center text-gray-300 italic font-medium tracking-widest">正在從雲端資料庫抓取數據...</td></tr>
+                            <tr><td colspan="5" class="p-20 text-center text-gray-300 italic font-medium tracking-widest">正在掃描資料庫路徑...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -97,9 +97,9 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, query } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // 直接使用您的專案配置
+        // 專案配置：church-ai-survey2
         const firebaseConfig = {
             apiKey: "AIzaSyDhPRv89AcdgbBIMgjxX2V5cx8JY8bTfs0",
             authDomain: "church-ai-survey2.firebaseapp.com",
@@ -115,25 +115,51 @@
         let pieInstance = null;
         let barInstance = null;
 
-        // 直接啟動監聽，跳過 Auth 步驟以避免錯誤
-        try {
-            const registrationsRef = collection(db, "registrations");
-            const q = query(registrationsRef, orderBy("timestamp", "desc"));
+        // 掃描器邏輯：同時監聽兩個可能的路徑
+        const paths = [
+            "registrations",
+            "artifacts/church-ai-survey2/public/data/registrations"
+        ];
 
-            onSnapshot(q, (snapshot) => {
-                allRecords = [];
-                snapshot.forEach((doc) => {
-                    allRecords.push(doc.data());
+        let activeListeners = 0;
+        const recordMap = new Map(); // 用 Map 避免重複抓取
+
+        paths.forEach(path => {
+            try {
+                const ref = collection(db, path);
+                onSnapshot(ref, (snapshot) => {
+                    snapshot.forEach(doc => {
+                        recordMap.set(doc.id, doc.data());
+                    });
+                    processAllData();
+                    activeListeners++;
+                    updateStatusText();
+                }, (err) => {
+                    console.warn(`路徑 ${path} 無法存取:`, err.message);
                 });
-                updateDashboard(allRecords);
-                document.getElementById('conn-text').innerText = '雲端連線正常：數據已即時同步';
-            }, (error) => {
-                console.error("Firebase Error:", error);
-                document.getElementById('conn-text').innerText = `連線錯誤: ${error.message}`;
-                document.getElementById('conn-dot').className = 'status-dot bg-red-500';
+            } catch (e) {
+                console.error(`初始化路徑 ${path} 失敗`);
+            }
+        });
+
+        function updateStatusText() {
+            const dot = document.getElementById('conn-dot');
+            const text = document.getElementById('conn-text');
+            if (activeListeners > 0) {
+                dot.className = 'status-dot bg-green-500';
+                text.innerText = '雲端連線正常：數據監控中';
+            }
+        }
+
+        function processAllData() {
+            allRecords = Array.from(recordMap.values());
+            // 按時間排序（如果有 timestamp 欄位的話）
+            allRecords.sort((a, b) => {
+                const tA = a.timestamp?.seconds || 0;
+                const tB = b.timestamp?.seconds || 0;
+                return tB - tA;
             });
-        } catch (e) {
-            document.getElementById('conn-text').innerText = `初始化失敗: ${e.message}`;
+            updateDashboard(allRecords);
         }
 
         function updateDashboard(data) {
@@ -149,7 +175,7 @@
 
             const tableBody = document.getElementById('dataTable');
             if (total === 0) {
-                tableBody.innerHTML = `<tr><td colspan="5" class="p-20 text-center text-gray-400">連線成功，但目前尚無報名資料。請去填寫測試報名。</td></tr>`;
+                tableBody.innerHTML = `<tr><td colspan="5" class="p-20 text-center text-gray-400">目前雲端資料庫是空的。請填寫一筆測試報名。</td></tr>`;
             } else {
                 tableBody.innerHTML = data.map(r => `
                     <tr class="border-b border-gray-50 transition-colors hover:bg-gray-50">
@@ -195,7 +221,7 @@
         }
 
         window.exportToCSV = function() {
-            if (allRecords.length === 0) return alert("尚無資料");
+            if (allRecords.length === 0) return alert("尚無資料可導出。");
             let csv = "\uFEFF姓名,方案,年齡,金額,末5碼,手機,LINE ID,教會,組班備註\n";
             allRecords.forEach(r => {
                 csv += `"${r.userName}","${r.courseType}","${r.userAgeRange}","${r.amount}","${r.bankLast5}","${r.userPhone}","${r.userLineId}","${r.userChurch}","${r.groupNote || ''} ${r.generalNote || ''}"\n`;
